@@ -1,0 +1,34 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/auth";
+import { getServiceSupabase } from "@/lib/db";
+
+export const runtime = "nodejs";
+
+/**
+ * Status polling for the dashboard. Returns status + comment_id for the
+ * requested job ids: GET /api/jobs?ids=uuid1,uuid2
+ */
+export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const idsParam = req.nextUrl.searchParams.get("ids");
+  const ids = (idsParam ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (ids.length === 0) {
+    return NextResponse.json({ jobs: {} });
+  }
+
+  const supabase = getServiceSupabase();
+  const { data } = await supabase
+    .from("review_jobs")
+    .select("id,status,comment_id")
+    .in("id", ids.slice(0, 200));
+
+  const jobs: Record<string, { status: string; comment_id: number | null }> = {};
+  for (const row of data ?? []) {
+    jobs[row.id] = { status: row.status, comment_id: row.comment_id };
+  }
+  return NextResponse.json({ jobs });
+}
