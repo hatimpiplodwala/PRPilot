@@ -1,4 +1,4 @@
-# PRPilot 🚀
+# PRPilot
 
 AI-powered GitHub PR review assistant. Installs as a **GitHub App**, automatically reviews pull requests with **Gemini**, and posts a structured review (summary · potential bugs · suggestions) back as a real PR comment. Built entirely on **free-tier** services.
 
