@@ -6,11 +6,15 @@ export interface PotentialBug {
   file: string;
   description: string;
   severity: Severity;
+  /** Line number in the NEW version of the file, when the finding maps to one. */
+  line?: number;
 }
 
 export interface Suggestion {
   file: string;
   description: string;
+  /** Line number in the NEW version of the file, when the finding maps to one. */
+  line?: number;
 }
 
 /** Structured review returned by the LLM (matches the Gemini responseSchema). */

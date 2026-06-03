@@ -35,6 +35,24 @@ describe("parseReview", () => {
     expect(review.suggestions[0].description).toBe("");
   });
 
+  it("keeps a valid positive integer line and drops invalid ones", () => {
+    const review = parseReview(
+      JSON.stringify({
+        summary: "ok",
+        potential_bugs: [
+          { file: "a.ts", description: "bug", severity: "high", line: 42 },
+          { file: "b.ts", description: "bug", severity: "low", line: 0 },
+          { file: "c.ts", description: "bug", severity: "low", line: 3.5 },
+        ],
+        suggestions: [{ file: "d.ts", description: "tidy" }],
+      })
+    );
+    expect(review.potential_bugs[0].line).toBe(42);
+    expect(review.potential_bugs[1].line).toBeUndefined();
+    expect(review.potential_bugs[2].line).toBeUndefined();
+    expect(review.suggestions[0].line).toBeUndefined();
+  });
+
   it("throws on non-object JSON", () => {
     expect(() => parseReview("42")).toThrow();
   });

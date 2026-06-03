@@ -219,12 +219,12 @@ function RowActions({
     <>
       {row.status === "done" && row.commentId && (
         <a
-          href={`${row.htmlUrl}#issuecomment-${row.commentId}`}
+          href={`${row.htmlUrl}/files`}
           target="_blank"
           rel="noreferrer"
           className="text-xs text-muted-foreground transition-colors hover:text-primary"
         >
-          View comment
+          View review
         </a>
       )}
       <Button

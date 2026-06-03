@@ -76,12 +76,75 @@ export function selectFilesForReview(files: ChangedFile[], maxFiles: number): Se
   return { files: kept, skipped, truncated };
 }
 
-/** Render selected files into a compact diff block for the LLM prompt. */
+interface PatchLine {
+  /** Line number in the new file; null for removed/meta lines. */
+  newLine: number | null;
+  type: "add" | "del" | "context" | "meta";
+  text: string; // raw patch line, including its leading +/-/space
+}
+
+const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/**
+ * Parse a unified-diff patch into lines tagged with their new-file line number.
+ * Pure and total — unknown lines are treated as context.
+ */
+export function parsePatch(patch: string): PatchLine[] {
+  const out: PatchLine[] = [];
+  let newLine = 0; // 0 = not inside a hunk yet
+  for (const text of patch.split("\n")) {
+    const hunk = text.match(HUNK_HEADER);
+    if (hunk) {
+      newLine = parseInt(hunk[1], 10);
+      out.push({ newLine: null, type: "meta", text });
+      continue;
+    }
+    // Anything before the first hunk header (or a "\ No newline" marker) is meta.
+    if (newLine === 0 || text.startsWith("\\")) {
+      out.push({ newLine: null, type: "meta", text });
+      continue;
+    }
+    if (text.startsWith("+")) {
+      out.push({ newLine, type: "add", text });
+      newLine++;
+    } else if (text.startsWith("-")) {
+      out.push({ newLine: null, type: "del", text });
+    } else {
+      out.push({ newLine, type: "context", text });
+      newLine++;
+    }
+  }
+  return out;
+}
+
+/**
+ * New-file line numbers that can carry an inline review comment on the RIGHT
+ * side — i.e. added and context lines that are part of the diff. GitHub rejects
+ * a review whose comments fall outside the diff, so we validate against this.
+ */
+export function commentableLines(patch: string): Set<number> {
+  const lines = new Set<number>();
+  for (const l of parsePatch(patch)) {
+    if (l.newLine !== null && (l.type === "add" || l.type === "context")) {
+      lines.add(l.newLine);
+    }
+  }
+  return lines;
+}
+
+/**
+ * Render selected files into a compact diff block for the LLM prompt. Each
+ * added/context line is prefixed with its new-file line number so the model can
+ * cite exact lines, which we then map to inline review comments.
+ */
 export function buildDiffText(files: ChangedFile[]): string {
   return files
     .map((f) => {
       const header = `### ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})`;
-      return `${header}\n\`\`\`diff\n${f.patch ?? ""}\n\`\`\``;
+      const body = parsePatch(f.patch ?? "")
+        .map((l) => (l.newLine !== null ? `${l.newLine}: ${l.text}` : l.text))
+        .join("\n");
+      return `${header}\n\`\`\`diff\n${body}\n\`\`\``;
     })
     .join("\n\n");
 }

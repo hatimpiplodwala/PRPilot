@@ -7,8 +7,9 @@ import { upsertInstallation, removeInstallation } from "@/lib/users";
 
 export const runtime = "nodejs";
 
-// We auto-review only these PR actions in v1.
-const REVIEW_ACTIONS = new Set(["opened", "reopened"]);
+// Auto-review when a PR opens, reopens, or receives new commits (synchronize).
+// New commits change head_sha, so enqueueJob dedup naturally yields a fresh review.
+const REVIEW_ACTIONS = new Set(["opened", "reopened", "synchronize"]);
 
 /**
  * GitHub App webhook receiver. Verifies the HMAC signature, handles the event,

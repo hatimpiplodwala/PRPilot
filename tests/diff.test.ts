@@ -4,6 +4,8 @@ import {
   fileScore,
   selectFilesForReview,
   buildDiffText,
+  parsePatch,
+  commentableLines,
 } from "@/lib/diff";
 import type { ChangedFile } from "@/lib/types";
 
@@ -97,5 +99,45 @@ describe("buildDiffText", () => {
     expect(text).toContain("### x.ts (modified, +2/-1)");
     expect(text).toContain("```diff");
     expect(text).toContain("+new");
+  });
+
+  it("annotates added/context lines with their new-file line number", () => {
+    const text = buildDiffText([
+      file({ patch: "@@ -1,2 +1,2 @@\n context\n-old\n+new" }),
+    ]);
+    expect(text).toContain("1:  context");
+    expect(text).toContain("2: +new");
+    // removed lines get no number
+    expect(text).toContain("\n-old");
+  });
+});
+
+describe("parsePatch", () => {
+  it("tracks new-file line numbers across adds, deletions, and context", () => {
+    const lines = parsePatch("@@ -10,3 +10,4 @@\n ctx\n-removed\n+added1\n+added2");
+    expect(lines.map((l) => [l.type, l.newLine])).toEqual([
+      ["meta", null],
+      ["context", 10],
+      ["del", null],
+      ["add", 11],
+      ["add", 12],
+    ]);
+  });
+
+  it("re-bases the counter on each hunk header", () => {
+    const lines = parsePatch("@@ -1 +1 @@\n+a\n@@ -50 +80 @@\n+b");
+    const adds = lines.filter((l) => l.type === "add");
+    expect(adds.map((l) => l.newLine)).toEqual([1, 80]);
+  });
+});
+
+describe("commentableLines", () => {
+  it("returns added and context lines, not removed ones", () => {
+    const lines = commentableLines("@@ -5,2 +5,3 @@\n ctx\n-gone\n+one\n+two");
+    expect([...lines].sort((a, b) => a - b)).toEqual([5, 6, 7]);
+  });
+
+  it("is empty for an empty patch", () => {
+    expect(commentableLines("").size).toBe(0);
   });
 });

@@ -11,7 +11,8 @@ import { buildDiffText, selectFilesForReview } from "./diff";
 
 const SYSTEM_INSTRUCTION = `You are a senior software engineer performing a code review on a GitHub pull request.
 Be concise and high-signal: only flag things that genuinely matter — likely bugs, correctness issues, security problems, and clear risks. Do NOT nitpick style, formatting, or naming unless it causes a real bug.
-Always reference the specific file. If you find nothing wrong, return empty arrays and say so briefly in the summary.`;
+Always reference the specific file. Each changed line in the diff is prefixed with its line number in the new file followed by ": " (for example, "42: + const x = 1"). When a finding is tied to a specific changed line, set "line" to that new-file line number so it can be posted as an inline comment. Omit "line" only when the finding is not tied to a single changed line.
+If you find nothing wrong, return empty arrays and say so briefly in the summary.`;
 
 // Mirrors the `Review` type. Gemini enforces this shape.
 const RESPONSE_SCHEMA = {
@@ -26,6 +27,7 @@ const RESPONSE_SCHEMA = {
           file: { type: SchemaType.STRING },
           description: { type: SchemaType.STRING },
           severity: { type: SchemaType.STRING, enum: ["low", "medium", "high"], format: "enum" },
+          line: { type: SchemaType.INTEGER, nullable: true },
         },
         required: ["file", "description", "severity"],
       },
@@ -37,6 +39,7 @@ const RESPONSE_SCHEMA = {
         properties: {
           file: { type: SchemaType.STRING },
           description: { type: SchemaType.STRING },
+          line: { type: SchemaType.INTEGER, nullable: true },
         },
         required: ["file", "description"],
       },
@@ -148,10 +151,17 @@ export function parseReview(text: string): Review {
       file: String(b.file ?? ""),
       description: String(b.description ?? ""),
       severity: (["low", "medium", "high"] as const).includes(b.severity) ? b.severity : "medium",
+      line: toLine(b.line),
     })),
     suggestions: (obj.suggestions as Review["suggestions"]).map((s) => ({
       file: String(s.file ?? ""),
       description: String(s.description ?? ""),
+      line: toLine(s.line),
     })),
   };
+}
+
+/** A finding's line number is only kept if it's a positive integer. */
+function toLine(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }

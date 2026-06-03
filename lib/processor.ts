@@ -4,16 +4,26 @@ import {
   getPullRequest,
   listPullRequestFiles,
   postPrComment,
+  postReview,
   updatePrComment,
+  type InlineComment,
 } from "./github";
+import { commentableLines } from "./diff";
 import { reviewDiff } from "./llm";
-import { renderReviewMarkdown, renderFailureMarkdown } from "./review";
-import type { ReviewJob } from "./types";
+import {
+  bugCommentBody,
+  renderReviewBody,
+  renderReviewMarkdown,
+  renderFailureMarkdown,
+  suggestionCommentBody,
+} from "./review";
+import type { Octokit } from "@octokit/rest";
+import type { PotentialBug, ReviewJob, Suggestion } from "./types";
 
 /**
  * The full review pipeline for a single claimed job:
- *   fetch diff -> Gemini review -> render Markdown -> post PR comment -> mark done.
- * On failure, marks the job failed and posts a short fallback comment.
+ *   fetch diff -> Gemini review -> map findings to diff lines -> post a PR review
+ *   with inline comments (falling back to a summary comment) -> mark done.
  *
  * Shared by the cron processor route and any manual drain.
  */
@@ -33,18 +43,62 @@ export async function processJob(job: ReviewJob): Promise<void> {
       body: pr.body ?? undefined,
     });
 
-    const markdown = renderReviewMarkdown(review, { truncatedNote });
-    // Re-review of the same commit updates the existing comment in place. If that
-    // comment was deleted (404) or is otherwise unreachable, post a fresh one.
+    // Which new-file lines are commentable, per file.
+    const lineSets = new Map<string, Set<number>>();
+    for (const f of files) {
+      if (f.patch) lineSets.set(f.filename, commentableLines(f.patch));
+    }
+
+    // Split findings into inline-anchored vs. summary-only.
+    const inline: InlineComment[] = [];
+    const remainingBugs: PotentialBug[] = [];
+    const remainingSuggestions: Suggestion[] = [];
+
+    for (const bug of review.potential_bugs) {
+      if (bug.line && lineSets.get(bug.file)?.has(bug.line)) {
+        inline.push({ path: bug.file, line: bug.line, body: bugCommentBody(bug) });
+      } else {
+        remainingBugs.push(bug);
+      }
+    }
+    for (const s of review.suggestions) {
+      if (s.line && lineSets.get(s.file)?.has(s.line)) {
+        inline.push({ path: s.file, line: s.line, body: suggestionCommentBody(s) });
+      } else {
+        remainingSuggestions.push(s);
+      }
+    }
+
     let commentId: number;
-    if (job.comment_id) {
+    if (inline.length > 0) {
+      const body = renderReviewBody(review.summary, remainingBugs, remainingSuggestions, {
+        truncatedNote,
+        inlineCount: inline.length,
+      });
       try {
-        commentId = await updatePrComment(octokit, job.repo_full_name, job.comment_id, markdown);
+        commentId = await postReview(
+          octokit,
+          job.repo_full_name,
+          job.pr_number,
+          pr.headSha,
+          body,
+          inline
+        );
       } catch {
-        commentId = await postPrComment(octokit, job.repo_full_name, job.pr_number, markdown);
+        // Inline review rejected (e.g. a line drifted out of the diff) — fall back
+        // to a single summary comment containing everything.
+        commentId = await postSummaryComment(
+          octokit,
+          job,
+          renderReviewMarkdown(review, { truncatedNote })
+        );
       }
     } else {
-      commentId = await postPrComment(octokit, job.repo_full_name, job.pr_number, markdown);
+      commentId = await postSummaryComment(
+        octokit,
+        job,
+        renderReviewMarkdown(review, { truncatedNote })
+      );
     }
 
     await completeJob(job.id, review, commentId);
@@ -63,4 +117,23 @@ export async function processJob(job: ReviewJob): Promise<void> {
     }
     await failJob(job.id, message);
   }
+}
+
+/**
+ * Post (or, for a re-review of the same commit, update in place) the summary
+ * issue comment. If the prior comment was deleted, posts a fresh one.
+ */
+async function postSummaryComment(
+  octokit: Octokit,
+  job: ReviewJob,
+  markdown: string
+): Promise<number> {
+  if (job.comment_id) {
+    try {
+      return await updatePrComment(octokit, job.repo_full_name, job.comment_id, markdown);
+    } catch {
+      return await postPrComment(octokit, job.repo_full_name, job.pr_number, markdown);
+    }
+  }
+  return await postPrComment(octokit, job.repo_full_name, job.pr_number, markdown);
 }

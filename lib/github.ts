@@ -93,6 +93,39 @@ export async function postPrComment(
   return data.id;
 }
 
+export interface InlineComment {
+  path: string;
+  /** Line number in the new file (RIGHT side of the diff). */
+  line: number;
+  body: string;
+}
+
+/**
+ * Post a PR review with inline comments anchored to specific lines. The caller
+ * must ensure every `line` is within the diff (see commentableLines) — GitHub
+ * rejects the whole review otherwise. Returns the review id.
+ */
+export async function postReview(
+  octokit: Octokit,
+  repoFullName: string,
+  prNumber: number,
+  commitId: string,
+  body: string,
+  comments: InlineComment[]
+): Promise<number> {
+  const { owner, repo } = splitRepo(repoFullName);
+  const { data } = await octokit.rest.pulls.createReview({
+    owner,
+    repo,
+    pull_number: prNumber,
+    commit_id: commitId,
+    body,
+    event: "COMMENT",
+    comments: comments.map((c) => ({ path: c.path, line: c.line, side: "RIGHT", body: c.body })),
+  });
+  return data.id;
+}
+
 /** Update an existing PR/issue comment in place. */
 export async function updatePrComment(
   octokit: Octokit,
