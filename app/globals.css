@@ -2,46 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* PRPilot theme — dark-only. Brand accent is a light blue (--primary).
+   The shadcn --accent token stays a subtle grey for hover surfaces so hovers
+   don't flood with blue. Gloss comes from inset highlights + layered shadows,
+   never gradients. */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 4%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 4%;
-    --primary: 240 6% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 6% 10%;
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
-    --accent: 240 5% 96%;
-    --accent-foreground: 240 6% 10%;
+    --background: 220 16% 8%;
+    --foreground: 210 20% 96%;
+    --card: 220 14% 11%;
+    --card-foreground: 210 20% 96%;
+    --popover: 220 14% 11%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 201 90% 60%;
+    --primary-foreground: 220 45% 8%;
+    --secondary: 220 12% 16%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 220 12% 15%;
+    --muted-foreground: 215 14% 62%;
+    --accent: 220 12% 16%;
+    --accent-foreground: 210 20% 96%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 240 6% 10%;
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 6%;
-    --card-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 6% 10%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 4% 16%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --ring: 240 5% 84%;
+    --border: 220 12% 18%;
+    --input: 220 12% 18%;
+    --ring: 201 90% 60%;
+    --radius: 0.75rem;
   }
 }
 
@@ -52,5 +38,26 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Glossy raised surface: thin top highlight + layered shadow. No gradients. */
+  .gloss {
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
+      0 1px 2px 0 hsl(0 0% 0% / 0.4),
+      0 12px 28px -16px hsl(0 0% 0% / 0.6);
+  }
+  /* Stronger highlight for primary (light-blue) surfaces. */
+  .gloss-primary {
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.22),
+      0 1px 2px 0 hsl(201 90% 20% / 0.5),
+      0 8px 22px -10px hsl(201 90% 50% / 0.45);
+  }
+  /* A faint light-blue halo, used on focus/hover accents. */
+  .ring-glow {
+    box-shadow: 0 0 0 1px hsl(var(--ring) / 0.5), 0 0 18px -2px hsl(var(--ring) / 0.35);
   }
 }

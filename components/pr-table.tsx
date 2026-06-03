@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import type { PrRow } from "@/lib/dashboard";
 import type { JobStatus } from "@/lib/types";
-import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 type Status = JobStatus | "none";
 
@@ -93,16 +93,16 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
 
   if (rows.length === 0) {
     return (
-      <p className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+      <p className="gloss rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
         No open pull requests in your installed repositories.
       </p>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="gloss overflow-hidden rounded-lg border border-border bg-card">
       <table className="w-full text-sm">
-        <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
           <tr>
             <th className="px-4 py-3 font-medium">Pull request</th>
             <th className="px-4 py-3 font-medium">Status</th>
@@ -111,7 +111,7 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={rowId(row)} className="border-b last:border-0">
+            <tr key={rowId(row)} className="border-b border-border last:border-0">
               <td className="px-4 py-3">
                 <a
                   href={row.htmlUrl}
@@ -134,9 +134,9 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
                       href={`${row.htmlUrl}#issuecomment-${row.commentId}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+                      className="text-xs text-muted-foreground transition-colors hover:text-primary"
                     >
-                      View <ExternalLink className="h-3 w-3" />
+                      View comment
                     </a>
                   )}
                   <Button
@@ -145,10 +145,8 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
                     disabled={row.pending || ACTIVE.includes(row.status)}
                     onClick={() => reviewNow(row)}
                   >
-                    {row.pending || ACTIVE.includes(row.status) ? (
+                    {(row.pending || ACTIVE.includes(row.status)) && (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5" />
                     )}
                     Review now
                   </Button>
