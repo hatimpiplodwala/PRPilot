@@ -11,7 +11,6 @@ type Status = JobStatus | "none";
 
 interface RowState extends PrRow {
   pending: boolean;
-  error?: string;
 }
 
 const ACTIVE: Status[] = ["queued", "running"];
@@ -30,12 +29,19 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
     try {
       const res = await fetch(`/api/jobs?ids=${ids.join(",")}`, { cache: "no-store" });
       if (!res.ok) return;
-      const data: { jobs: Record<string, { status: JobStatus; comment_id: number | null }> } =
-        await res.json();
+      const data: {
+        jobs: Record<string, { status: JobStatus; comment_id: number | null; error: string | null }>;
+      } = await res.json();
       setRows((prev) =>
         prev.map((r) => {
           const j = r.jobId ? data.jobs[r.jobId] : undefined;
-          return j ? { ...r, status: j.status, commentId: j.comment_id } : r;
+          if (!j) return r;
+          return {
+            ...r,
+            status: j.status,
+            commentId: j.comment_id,
+            error: j.status === "failed" ? j.error ?? "Review failed" : null,
+          };
         })
       );
     } catch {
@@ -51,7 +57,7 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
 
   async function reviewNow(row: RowState) {
     setRows((prev) =>
-      prev.map((r) => (rowId(r) === rowId(row) ? { ...r, pending: true, error: undefined } : r))
+      prev.map((r) => (rowId(r) === rowId(row) ? { ...r, pending: true, error: null } : r))
     );
     try {
       const res = await fetch("/api/reviews", {
@@ -78,7 +84,7 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
       setRows((prev) =>
         prev.map((r) =>
           rowId(r) === rowId(row)
-            ? { ...r, pending: false, status: "queued", jobId: data.jobId }
+            ? { ...r, pending: false, status: "queued", jobId: data.jobId, error: null }
             : r
         )
       );
@@ -100,63 +106,91 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
   }
 
   return (
-    <div className="gloss overflow-hidden rounded-lg border border-border bg-card">
-      <table className="w-full text-sm">
-        <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-          <tr>
-            <th className="px-4 py-3 font-medium">Pull request</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 text-right font-medium">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={rowId(row)} className="border-b border-border last:border-0">
-              <td className="px-4 py-3">
-                <a
-                  href={row.htmlUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium hover:underline"
-                >
-                  {row.repoFullName} #{row.number}
-                </a>
-                <div className="truncate text-xs text-muted-foreground">{row.title}</div>
-                {row.error && <div className="text-xs text-destructive">{row.error}</div>}
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge status={row.status} />
-              </td>
-              <td className="px-4 py-3 text-right">
-                <div className="flex items-center justify-end gap-2">
-                  {row.status === "done" && row.commentId && (
-                    <a
-                      href={`${row.htmlUrl}#issuecomment-${row.commentId}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-muted-foreground transition-colors hover:text-primary"
-                    >
-                      View comment
-                    </a>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={row.pending || ACTIVE.includes(row.status)}
-                    onClick={() => reviewNow(row)}
-                  >
-                    {(row.pending || ACTIVE.includes(row.status)) && (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    )}
-                    Review now
-                  </Button>
-                </div>
-              </td>
+    <>
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 sm:hidden">
+        {rows.map((row) => (
+          <div key={rowId(row)} className="gloss rounded-lg border border-border bg-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <PrLink row={row} />
+              <StatusBadge status={row.status} />
+            </div>
+            <p className="mt-1 truncate text-xs text-muted-foreground">{row.title}</p>
+            {row.error && <p className="mt-1 text-xs text-destructive">{row.error}</p>}
+            <div className="mt-3 flex items-center justify-end gap-3">
+              <RowActions row={row} onReview={reviewNow} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="gloss hidden overflow-hidden rounded-lg border border-border bg-card sm:block">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+            <tr>
+              <th className="px-4 py-3 font-medium">Pull request</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 text-right font-medium">Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={rowId(row)} className="border-b border-border last:border-0">
+                <td className="px-4 py-3">
+                  <PrLink row={row} />
+                  <div className="truncate text-xs text-muted-foreground">{row.title}</div>
+                  {row.error && <div className="text-xs text-destructive">{row.error}</div>}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={row.status} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-3">
+                    <RowActions row={row} onReview={reviewNow} />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function PrLink({ row }: { row: RowState }) {
+  return (
+    <a
+      href={row.htmlUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="font-medium hover:underline"
+    >
+      {row.repoFullName} #{row.number}
+    </a>
+  );
+}
+
+function RowActions({ row, onReview }: { row: RowState; onReview: (r: RowState) => void }) {
+  const busy = row.pending || ACTIVE.includes(row.status);
+  return (
+    <>
+      {row.status === "done" && row.commentId && (
+        <a
+          href={`${row.htmlUrl}#issuecomment-${row.commentId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-muted-foreground transition-colors hover:text-primary"
+        >
+          View comment
+        </a>
+      )}
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => onReview(row)}>
+        {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        {row.status === "failed" ? "Try again" : "Review now"}
+      </Button>
+    </>
   );
 }
 

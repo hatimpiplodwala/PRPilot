@@ -14,6 +14,7 @@ export interface PrRow {
   status: JobStatus | "none";
   jobId: string | null;
   commentId: number | null;
+  error: string | null;
 }
 
 const jobKey = (repo: string, pr: number) => `${repo}#${pr}`;
@@ -52,6 +53,7 @@ export async function getDashboardData(userId: string): Promise<{
         status: job?.status ?? "none",
         jobId: job?.id ?? null,
         commentId: job?.comment_id ?? null,
+        error: job?.status === "failed" ? job?.error ?? null : null,
       });
     }
   }

@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { listUserInstallations } from "@/lib/users";
@@ -50,6 +50,23 @@ export async function POST(req: NextRequest) {
     headSha,
     trigger: "manual",
   });
+
+  // Kick the processor right away so a manual review starts in ~1s instead of
+  // waiting up to a minute for the next cron tick. `after` runs once the response
+  // has been sent; the cron drain remains the fallback if this kick is missed.
+  if (job.status === "queued") {
+    const origin = req.nextUrl.origin;
+    after(async () => {
+      try {
+        await fetch(`${origin}/api/internal/process`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${env.cronSecret}` },
+        });
+      } catch {
+        // Swallowed: cron will drain the job on its next tick.
+      }
+    });
+  }
 
   return NextResponse.json({ jobId: job.id, status: job.status });
 }

@@ -23,12 +23,15 @@ export async function GET(req: NextRequest) {
   const supabase = getServiceSupabase();
   const { data } = await supabase
     .from("review_jobs")
-    .select("id,status,comment_id")
+    .select("id,status,comment_id,error")
     .in("id", ids.slice(0, 200));
 
-  const jobs: Record<string, { status: string; comment_id: number | null }> = {};
+  const jobs: Record<
+    string,
+    { status: string; comment_id: number | null; error: string | null }
+  > = {};
   for (const row of data ?? []) {
-    jobs[row.id] = { status: row.status, comment_id: row.comment_id };
+    jobs[row.id] = { status: row.status, comment_id: row.comment_id, error: row.error };
   }
   return NextResponse.json({ jobs });
 }
