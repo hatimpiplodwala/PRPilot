@@ -28,13 +28,27 @@ export async function getDashboardData(userId: string): Promise<{
   prs: PrRow[];
   rateLimit: RateLimitStatus;
 }> {
-  const rateLimit = await getRateLimitStatus(`user:${userId}`, env.rateLimitPerHour);
   const installations = await listUserInstallations(userId);
   if (installations.length === 0) {
+    const rateLimit = await getRateLimitStatus(`user:${userId}`, env.rateLimitPerHour);
     return { hasInstallations: false, prs: [], rateLimit };
   }
 
-  const jobs = await listRecentJobs(200);
+  const installationIds = installations.map((i) => i.github_installation_id);
+
+  // Rate limit, recent jobs, and each installation's open PRs are independent —
+  // fetch them concurrently.
+  const [rateLimit, jobs, prGroups] = await Promise.all([
+    getRateLimitStatus(`user:${userId}`, env.rateLimitPerHour),
+    listRecentJobs(installationIds),
+    Promise.all(
+      installations.map(async (inst) => ({
+        installationId: inst.github_installation_id,
+        prs: await listOpenPullRequests(inst.github_installation_id),
+      }))
+    ),
+  ]);
+
   // Latest job per (repo, pr) — jobs are already newest-first.
   const latestByPr = new Map<string, (typeof jobs)[number]>();
   for (const job of jobs) {
@@ -43,12 +57,11 @@ export async function getDashboardData(userId: string): Promise<{
   }
 
   const prs: PrRow[] = [];
-  for (const inst of installations) {
-    const openPrs = await listOpenPullRequests(inst.github_installation_id);
-    for (const pr of openPrs) {
+  for (const group of prGroups) {
+    for (const pr of group.prs) {
       const job = latestByPr.get(jobKey(pr.repoFullName, pr.number));
       prs.push({
-        installationId: inst.github_installation_id,
+        installationId: group.installationId,
         repoFullName: pr.repoFullName,
         number: pr.number,
         title: pr.title,

@@ -159,24 +159,24 @@ export async function listOpenPullRequests(installationId: number): Promise<
     per_page: 100,
   });
 
-  const results: Awaited<ReturnType<typeof listOpenPullRequests>> = [];
-  for (const repo of repos) {
-    const prs = await octokit.paginate(octokit.rest.pulls.list, {
-      owner: repo.owner.login,
-      repo: repo.name,
-      state: "open",
-      per_page: 100,
-    });
-    for (const pr of prs) {
-      results.push({
+  // Fetch each repo's open PRs in parallel rather than one round trip at a time.
+  const perRepo = await Promise.all(
+    repos.map(async (repo) => {
+      const prs = await octokit.paginate(octokit.rest.pulls.list, {
+        owner: repo.owner.login,
+        repo: repo.name,
+        state: "open",
+        per_page: 100,
+      });
+      return prs.map((pr) => ({
         repoFullName: repo.full_name,
         number: pr.number,
         title: pr.title,
         headSha: pr.head.sha,
         htmlUrl: pr.html_url,
         updatedAt: pr.updated_at,
-      });
-    }
-  }
-  return results;
+      }));
+    })
+  );
+  return perRepo.flat();
 }

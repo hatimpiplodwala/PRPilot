@@ -120,18 +120,21 @@ export async function failJob(jobId: string, message: string): Promise<void> {
   if (error) throw new Error(`failJob failed: ${error.message}`);
 }
 
-export async function getJob(jobId: string): Promise<ReviewJob | null> {
-  const supabase = getServiceSupabase();
-  const { data } = await supabase.from("review_jobs").select("*").eq("id", jobId).maybeSingle();
-  return (data as ReviewJob) ?? null;
-}
-
-/** Most recent job per (repo, pr) — used to show status in the dashboard. */
-export async function listRecentJobs(limit = 100): Promise<ReviewJob[]> {
+/**
+ * Recent jobs, newest first — used to show status in the dashboard. Scoped to
+ * the given installations so a user always sees their own jobs (and never pages
+ * past them when the global table is large).
+ */
+export async function listRecentJobs(
+  installationIds: number[],
+  limit = 200
+): Promise<ReviewJob[]> {
+  if (installationIds.length === 0) return [];
   const supabase = getServiceSupabase();
   const { data } = await supabase
     .from("review_jobs")
     .select("*")
+    .in("installation_id", installationIds)
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data as ReviewJob[]) ?? [];

@@ -25,12 +25,25 @@ export async function GET(req: NextRequest) {
         installation_id: Number(installationId),
       });
       const accountLogin =
-        data.account && "login" in data.account ? data.account.login : "unknown";
-      await upsertInstallation({
-        githubInstallationId: Number(installationId),
-        accountLogin,
-        userId: session.user.id,
-      });
+        data.account && "login" in data.account ? data.account.login : null;
+
+      // Only link the installation to this user if its GitHub account matches the
+      // signed-in user. Installation ids are guessable, so without this check a
+      // user could claim someone else's installation by visiting this URL. This
+      // covers personal-account installs (the target use case); org installs are
+      // left to be recorded (unlinked) by the installation webhook.
+      const owns =
+        !!accountLogin &&
+        !!session.user.login &&
+        accountLogin.toLowerCase() === session.user.login.toLowerCase();
+
+      if (owns) {
+        await upsertInstallation({
+          githubInstallationId: Number(installationId),
+          accountLogin,
+          userId: session.user.id,
+        });
+      }
     } catch {
       // Non-fatal: the installation webhook will also record it.
     }

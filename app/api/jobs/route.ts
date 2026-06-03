@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { getServiceSupabase } from "@/lib/db";
+import { listUserInstallations } from "@/lib/users";
 
 export const runtime = "nodejs";
 
@@ -20,11 +21,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ jobs: {} });
   }
 
+  // Authorization: only return jobs that belong to the user's own installations.
+  const installations = await listUserInstallations(session.user.id);
+  const installationIds = installations.map((i) => i.github_installation_id);
+  if (installationIds.length === 0) {
+    return NextResponse.json({ jobs: {} });
+  }
+
   const supabase = getServiceSupabase();
   const { data } = await supabase
     .from("review_jobs")
     .select("id,status,comment_id,error,updated_at")
-    .in("id", ids.slice(0, 200));
+    .in("id", ids.slice(0, 200))
+    .in("installation_id", installationIds);
 
   const jobs: Record<
     string,

@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 import { claimQueuedJobs } from "@/lib/jobs";
 import { processJob } from "@/lib/processor";
+
+/** Constant-time string compare so the cron secret can't be probed by timing. */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
 
 export const runtime = "nodejs";
 // Give the review pipeline more headroom than the default. On Vercel Hobby this
@@ -15,7 +23,7 @@ export const maxDuration = 60;
  */
 export async function POST(req: NextRequest) {
   const authz = req.headers.get("authorization") ?? "";
-  if (authz !== `Bearer ${env.cronSecret}`) {
+  if (!safeEqual(authz, `Bearer ${env.cronSecret}`)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
