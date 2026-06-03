@@ -26,6 +26,31 @@ export interface RateLimitResult {
   limit: number;
 }
 
+export interface RateLimitStatus {
+  used: number;
+  remaining: number;
+  limit: number;
+}
+
+/**
+ * Read the current window's usage for `subject` WITHOUT consuming a slot.
+ * Used to show "N of M reviews left this hour" on the dashboard.
+ */
+export async function getRateLimitStatus(
+  subject: string,
+  limit: number
+): Promise<RateLimitStatus> {
+  const supabase = getServiceSupabase();
+  const { data } = await supabase
+    .from("rate_limits")
+    .select("count")
+    .eq("subject", subject)
+    .eq("window_start", hourWindowStart())
+    .maybeSingle();
+  const used = (data?.count as number | undefined) ?? 0;
+  return { used, remaining: Math.max(0, limit - used), limit };
+}
+
 /**
  * Atomically record one request for `subject` in the current hour window and
  * report whether it was within `limit`. Relies on the Postgres function

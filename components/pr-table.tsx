@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { useToast } from "@/components/toast";
 import type { PrRow } from "@/lib/dashboard";
+import type { RateLimitStatus } from "@/lib/ratelimit";
 import type { JobStatus } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 
@@ -15,10 +17,20 @@ interface RowState extends PrRow {
 
 const ACTIVE: Status[] = ["queued", "running"];
 
-export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
+export function PrTable({
+  initialRows,
+  rateLimit,
+}: {
+  initialRows: PrRow[];
+  rateLimit: RateLimitStatus;
+}) {
+  const { toast } = useToast();
   const [rows, setRows] = useState<RowState[]>(
     initialRows.map((r) => ({ ...r, pending: false }))
   );
+  const [remaining, setRemaining] = useState(rateLimit.remaining);
+  const limit = rateLimit.limit;
+  const atLimit = remaining <= 0;
 
   const hasActive = rows.some((r) => ACTIVE.includes(r.status));
 
@@ -30,7 +42,10 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
       const res = await fetch(`/api/jobs?ids=${ids.join(",")}`, { cache: "no-store" });
       if (!res.ok) return;
       const data: {
-        jobs: Record<string, { status: JobStatus; comment_id: number | null; error: string | null }>;
+        jobs: Record<
+          string,
+          { status: JobStatus; comment_id: number | null; error: string | null; updated_at: string }
+        >;
       } = await res.json();
       setRows((prev) =>
         prev.map((r) => {
@@ -41,6 +56,7 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
             status: j.status,
             commentId: j.comment_id,
             error: j.status === "failed" ? j.error ?? "Review failed" : null,
+            reviewedAt: j.status === "done" ? j.updated_at : null,
           };
         })
       );
@@ -57,7 +73,7 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
 
   async function reviewNow(row: RowState) {
     setRows((prev) =>
-      prev.map((r) => (rowId(r) === rowId(row) ? { ...r, pending: true, error: null } : r))
+      prev.map((r) => (rowId(r) === rowId(row) ? { ...r, pending: true } : r))
     );
     try {
       const res = await fetch("/api/reviews", {
@@ -72,15 +88,14 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data?.rateLimit) setRemaining(data.rateLimit.remaining);
         setRows((prev) =>
-          prev.map((r) =>
-            rowId(r) === rowId(row)
-              ? { ...r, pending: false, error: data.error ?? "Failed to queue" }
-              : r
-          )
+          prev.map((r) => (rowId(r) === rowId(row) ? { ...r, pending: false } : r))
         );
+        toast(data?.error ?? "Failed to queue review", "error");
         return;
       }
+      if (data?.rateLimit) setRemaining(data.rateLimit.remaining);
       setRows((prev) =>
         prev.map((r) =>
           rowId(r) === rowId(row)
@@ -90,89 +105,110 @@ export function PrTable({ initialRows }: { initialRows: PrRow[] }) {
       );
     } catch {
       setRows((prev) =>
-        prev.map((r) =>
-          rowId(r) === rowId(row) ? { ...r, pending: false, error: "Network error" } : r
-        )
+        prev.map((r) => (rowId(r) === rowId(row) ? { ...r, pending: false } : r))
       );
+      toast("Network error — please try again", "error");
     }
   }
 
-  if (rows.length === 0) {
-    return (
-      <p className="gloss rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-        No open pull requests in your installed repositories.
-      </p>
-    );
-  }
+  const list = rows.length === 0 ? null : rows;
 
   return (
     <>
-      {/* Mobile: stacked cards */}
-      <div className="space-y-3 sm:hidden">
-        {rows.map((row) => (
-          <div key={rowId(row)} className="gloss rounded-lg border border-border bg-card p-4">
-            <div className="flex items-start justify-between gap-3">
-              <PrLink row={row} />
-              <StatusBadge status={row.status} />
-            </div>
-            <p className="mt-1 truncate text-xs text-muted-foreground">{row.title}</p>
-            {row.error && <p className="mt-1 text-xs text-destructive">{row.error}</p>}
-            <div className="mt-3 flex items-center justify-end gap-3">
-              <RowActions row={row} onReview={reviewNow} />
-            </div>
-          </div>
-        ))}
+      <div className="mb-3 text-xs text-muted-foreground">
+        {remaining} of {limit} manual reviews left this hour
       </div>
 
-      {/* Desktop: table */}
-      <div className="gloss hidden overflow-hidden rounded-lg border border-border bg-card sm:block">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 font-medium">Pull request</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 text-right font-medium">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={rowId(row)} className="border-b border-border last:border-0">
-                <td className="px-4 py-3">
+      {list === null ? (
+        <p className="gloss rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          No open pull requests in your installed repositories.
+        </p>
+      ) : (
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="space-y-3 sm:hidden">
+            {list.map((row) => (
+              <div key={rowId(row)} className="gloss rounded-lg border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
                   <PrLink row={row} />
-                  <div className="truncate text-xs text-muted-foreground">{row.title}</div>
-                  {row.error && <div className="text-xs text-destructive">{row.error}</div>}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={row.status} />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    <RowActions row={row} onReview={reviewNow} />
-                  </div>
-                </td>
-              </tr>
+                  <StatusCell row={row} />
+                </div>
+                <p className="mt-1 truncate text-xs text-muted-foreground">{row.title}</p>
+                {row.error && <p className="mt-1 text-xs text-destructive">{row.error}</p>}
+                <div className="mt-3 flex items-center justify-end gap-3">
+                  <RowActions row={row} onReview={reviewNow} atLimit={atLimit} />
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          {/* Desktop: table */}
+          <div className="gloss hidden overflow-hidden rounded-lg border border-border bg-card sm:block">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Pull request</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((row) => (
+                  <tr key={rowId(row)} className="border-b border-border last:border-0">
+                    <td className="px-4 py-3">
+                      <PrLink row={row} />
+                      <div className="truncate text-xs text-muted-foreground">{row.title}</div>
+                      {row.error && <div className="text-xs text-destructive">{row.error}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusCell row={row} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        <RowActions row={row} onReview={reviewNow} atLimit={atLimit} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </>
   );
 }
 
 function PrLink({ row }: { row: RowState }) {
   return (
-    <a
-      href={row.htmlUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="font-medium hover:underline"
-    >
+    <a href={row.htmlUrl} target="_blank" rel="noreferrer" className="font-medium hover:underline">
       {row.repoFullName} #{row.number}
     </a>
   );
 }
 
-function RowActions({ row, onReview }: { row: RowState; onReview: (r: RowState) => void }) {
+function StatusCell({ row }: { row: RowState }) {
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <StatusBadge status={row.status} />
+      {row.status === "done" && row.reviewedAt && (
+        <span className="text-xs text-muted-foreground">
+          <TimeAgo iso={row.reviewedAt} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+function RowActions({
+  row,
+  onReview,
+  atLimit,
+}: {
+  row: RowState;
+  onReview: (r: RowState) => void;
+  atLimit: boolean;
+}) {
   const busy = row.pending || ACTIVE.includes(row.status);
   return (
     <>
@@ -186,12 +222,42 @@ function RowActions({ row, onReview }: { row: RowState; onReview: (r: RowState) 
           View comment
         </a>
       )}
-      <Button size="sm" variant="outline" disabled={busy} onClick={() => onReview(row)}>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy || atLimit}
+        title={atLimit ? "Hourly review limit reached" : undefined}
+        onClick={() => onReview(row)}
+      >
         {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {row.status === "failed" ? "Try again" : "Review now"}
       </Button>
     </>
   );
+}
+
+/** Relative "Xm ago" timestamp. Renders nothing until mounted to avoid a
+ *  server/client hydration mismatch, then refreshes once a minute. */
+function TimeAgo({ iso }: { iso: string }) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    const update = () => setText(formatAgo(iso));
+    update();
+    const t = setInterval(update, 60_000);
+    return () => clearInterval(t);
+  }, [iso]);
+  return <span suppressHydrationWarning>{text}</span>;
+}
+
+function formatAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }
 
 const rowId = (r: PrRow) => `${r.repoFullName}#${r.number}`;

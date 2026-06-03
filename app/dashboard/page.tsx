@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
 
-  const { hasInstallations, prs } = await getDashboardData(session.user.id);
+  const { hasInstallations, prs, rateLimit } = await getDashboardData(session.user.id);
   const installUrl = `https://github.com/apps/${env.githubAppSlug}/installations/new`;
 
   return (
@@ -60,7 +60,7 @@ export default async function DashboardPage() {
               Manage repositories
             </a>
           </div>
-          <PrTable initialRows={prs} />
+          <PrTable initialRows={prs} rateLimit={rateLimit} />
         </>
       )}
     </main>

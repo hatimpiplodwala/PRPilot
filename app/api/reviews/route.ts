@@ -38,7 +38,10 @@ export async function POST(req: NextRequest) {
   const rl = await consumeRateLimit(`user:${session.user.id}`, env.rateLimitPerHour);
   if (!rl.allowed) {
     return NextResponse.json(
-      { error: `Rate limit reached (${rl.limit}/hour). Try again later.` },
+      {
+        error: `Hourly limit reached (${rl.limit} reviews). Try again later.`,
+        rateLimit: { remaining: 0, limit: rl.limit },
+      },
       { status: 429 }
     );
   }
@@ -68,5 +71,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ jobId: job.id, status: job.status });
+  return NextResponse.json({
+    jobId: job.id,
+    status: job.status,
+    rateLimit: { remaining: rl.remaining, limit: rl.limit },
+  });
 }

@@ -1,6 +1,8 @@
 import { listUserInstallations } from "./users";
 import { listOpenPullRequests } from "./github";
 import { listRecentJobs } from "./jobs";
+import { getRateLimitStatus, type RateLimitStatus } from "./ratelimit";
+import { env } from "./env";
 import type { JobStatus } from "./types";
 
 export interface PrRow {
@@ -15,6 +17,7 @@ export interface PrRow {
   jobId: string | null;
   commentId: number | null;
   error: string | null;
+  reviewedAt: string | null;
 }
 
 const jobKey = (repo: string, pr: number) => `${repo}#${pr}`;
@@ -23,10 +26,12 @@ const jobKey = (repo: string, pr: number) => `${repo}#${pr}`;
 export async function getDashboardData(userId: string): Promise<{
   hasInstallations: boolean;
   prs: PrRow[];
+  rateLimit: RateLimitStatus;
 }> {
+  const rateLimit = await getRateLimitStatus(`user:${userId}`, env.rateLimitPerHour);
   const installations = await listUserInstallations(userId);
   if (installations.length === 0) {
-    return { hasInstallations: false, prs: [] };
+    return { hasInstallations: false, prs: [], rateLimit };
   }
 
   const jobs = await listRecentJobs(200);
@@ -54,10 +59,11 @@ export async function getDashboardData(userId: string): Promise<{
         jobId: job?.id ?? null,
         commentId: job?.comment_id ?? null,
         error: job?.status === "failed" ? job?.error ?? null : null,
+        reviewedAt: job?.status === "done" ? job?.updated_at ?? null : null,
       });
     }
   }
 
   prs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return { hasInstallations: true, prs };
+  return { hasInstallations: true, prs, rateLimit };
 }
