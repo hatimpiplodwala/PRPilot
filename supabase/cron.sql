@@ -1,6 +1,12 @@
--- Schedule the Edge Functions with pg_cron + pg_net.
--- Run once in the Supabase SQL editor after deploying the functions.
--- Replace <PROJECT_REF> and <ANON_KEY> with your values.
+-- Schedule the background queue drain with pg_cron + pg_net.
+-- Run once in the Supabase SQL editor (replace <APP_URL> and <CRON_SECRET>).
+--
+-- This calls the deployed Next.js processor route directly, so you do NOT need
+-- to deploy the Edge Functions or install the Supabase CLI. (The functions in
+-- supabase/functions/ remain a valid alternative if you prefer that route.)
+--
+--   <APP_URL>      e.g. https://pr-pilot-nine.vercel.app   (no trailing slash)
+--   <CRON_SECRET>  the same value as the app's CRON_SECRET env var
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
@@ -11,24 +17,21 @@ select cron.schedule(
   '* * * * *',
   $$
   select net.http_post(
-    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/process-reviews',
-    headers := '{"Authorization": "Bearer <ANON_KEY>", "Content-Type": "application/json"}'::jsonb,
+    url := '<APP_URL>/api/internal/process',
+    headers := '{"Authorization": "Bearer <CRON_SECRET>", "Content-Type": "application/json"}'::jsonb,
     body := '{}'::jsonb
   );
   $$
 );
 
--- Keep the project warm twice a day.
+-- Keep the free project warm so it does not pause after ~1 week idle.
+-- (The cron activity itself keeps the database active; a trivial query is enough.)
 select cron.schedule(
   'prpilot-keep-alive',
   '0 */12 * * *',
-  $$
-  select net.http_post(
-    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/keep-alive',
-    headers := '{"Authorization": "Bearer <ANON_KEY>", "Content-Type": "application/json"}'::jsonb,
-    body := '{}'::jsonb
-  );
-  $$
+  $$ select 1; $$
 );
 
--- To remove later: select cron.unschedule('prpilot-process-reviews');
+-- To remove later:
+--   select cron.unschedule('prpilot-process-reviews');
+--   select cron.unschedule('prpilot-keep-alive');
