@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { LogoMark, Wordmark } from "@/components/logo";
+import { ReviewPreview } from "@/components/review-preview";
 import { Github } from "lucide-react";
 
 export default async function Home() {
@@ -10,92 +11,81 @@ export default async function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-5">
-        <div className="flex items-center gap-2.5">
-          <LogoMark className="h-8 w-8" />
-          <Wordmark className="text-lg" />
+      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <LogoMark className="h-7 w-7" />
+            <Wordmark />
+          </div>
+          <a
+            href="https://github.com/hatimpiplodwala/PRPilot"
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            github.com/PRPilot
+          </a>
         </div>
-        <a
-          href="https://github.com/hatimpiplodwala/PRPilot"
-          target="_blank"
-          rel="noreferrer"
-          className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          GitHub
-        </a>
       </header>
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6">
         {/* Hero */}
-        <section className="flex flex-col items-center gap-6 py-20 text-center sm:py-28">
-          <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            Automated AI code review
-          </span>
-          <h1 className="max-w-2xl text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            High-signal reviews on every pull request
-          </h1>
-          <p className="max-w-xl text-balance text-base text-muted-foreground sm:text-lg">
-            Install the app, open a PR, and get a structured review posted as a comment — likely
-            bugs and concrete suggestions, ranked by severity, with no nitpicks.
-          </p>
-          <div className="mt-2 flex flex-col items-center gap-3 sm:flex-row">
-            <form
-              action={async () => {
-                "use server";
-                await signIn("github", { redirectTo: "/dashboard" });
-              }}
-            >
-              <Button type="submit" size="lg">
-                <Github className="h-5 w-5" />
-                Continue with GitHub
-              </Button>
-            </form>
-            <a href="#how-it-works">
-              <Button variant="outline" size="lg" type="button">
-                How it works
-              </Button>
-            </a>
+        <section className="grid items-center gap-10 py-16 lg:grid-cols-[1.05fr_1fr] lg:gap-12 lg:py-24">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">
+              Automated PR review
+            </p>
+            <h1 className="mt-4 text-balance text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+              A reviewer on every pull request.
+            </h1>
+            <p className="mt-5 max-w-md text-base leading-relaxed text-muted-foreground">
+              PRPilot reads the diff the moment a PR opens and posts a structured review as a
+              comment — likely bugs ranked by severity and concrete suggestions, with none of the
+              nitpicks.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("github", { redirectTo: "/dashboard" });
+                }}
+              >
+                <Button type="submit" size="lg">
+                  <Github className="h-5 w-5" />
+                  Continue with GitHub
+                </Button>
+              </form>
+              <span className="font-mono text-xs text-muted-foreground">
+                Free · runs on your repos
+              </span>
+            </div>
+          </div>
+
+          {/* The product itself, as the hero visual */}
+          <div className="lg:pl-2">
+            <ReviewPreview />
           </div>
         </section>
 
         {/* How it works */}
-        <section id="how-it-works" className="scroll-mt-20 border-t border-border py-16">
-          <h2 className="text-center text-sm font-medium uppercase tracking-wider text-muted-foreground">
-            How it works
-          </h2>
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Step
-              n="1"
-              title="Install the app"
-              desc="Grant access to the repositories you want reviewed. Permissions are least-privilege."
-            />
-            <Step
-              n="2"
-              title="Open a pull request"
-              desc="PRPilot triggers automatically when a PR is opened or reopened — no extra steps."
-            />
-            <Step
-              n="3"
-              title="Get a review"
-              desc="A structured review is posted as a PR comment in seconds. Re-run it anytime."
-            />
+        <section className="border-t border-border py-14">
+          <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+            <Step n="01" title="Install the app" desc="Grant access to the repositories you want reviewed. Permissions are least-privilege." />
+            <Step n="02" title="Open a pull request" desc="PRPilot triggers automatically on open and reopen. No commands, no config." />
+            <Step n="03" title="Get the review" desc="A structured comment lands in seconds. Re-run it manually anytime from your dashboard." />
           </div>
         </section>
 
-        {/* Features */}
-        <section className="grid grid-cols-1 gap-4 border-t border-border py-16 sm:grid-cols-3">
-          <Feature
-            title="Auto-review"
-            desc="Runs the moment a pull request opens, so feedback is waiting when you are."
-          />
-          <Feature
-            title="Finds likely bugs"
-            desc="Surfaces probable defects and real risks, each labeled by severity."
-          />
-          <Feature
-            title="Actionable suggestions"
-            desc="Concise, concrete improvements — high-signal, never a wall of nitpicks."
-          />
+        {/* What it does — replaces the generic feature-card grid */}
+        <section className="border-t border-border py-14">
+          <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            What you get
+          </h2>
+          <dl className="mt-6 divide-y divide-border">
+            <Capability term="Likely bugs, ranked" desc="Probable defects and real risks, each labeled High, Medium, or Low — sorted so the important ones lead." />
+            <Capability term="Concrete suggestions" desc="Actionable improvements tied to specific files. High-signal, never a wall of style nitpicks." />
+            <Capability term="Hands-off automation" desc="Reviews post the moment a PR opens. A manual “Review now” is there for re-runs after fixes." />
+          </dl>
         </section>
       </main>
 
@@ -121,22 +111,19 @@ export default async function Home() {
 
 function Step({ n, title, desc }: { n: string; title: string; desc: string }) {
   return (
-    <div className="gloss rounded-lg border border-border bg-card p-6">
-      <div className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
-        {n}
-      </div>
-      <h3 className="mt-4 font-medium">{title}</h3>
-      <p className="mt-1.5 text-sm text-muted-foreground">{desc}</p>
+    <div className="bg-card p-6">
+      <span className="font-mono text-sm text-primary">{n}</span>
+      <h3 className="mt-3 font-medium">{title}</h3>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{desc}</p>
     </div>
   );
 }
 
-function Feature({ title, desc }: { title: string; desc: string }) {
+function Capability({ term, desc }: { term: string; desc: string }) {
   return (
-    <div className="gloss rounded-lg border border-border bg-card p-6">
-      <div className="h-1 w-8 rounded-full bg-primary" />
-      <h3 className="mt-4 font-medium">{title}</h3>
-      <p className="mt-1.5 text-sm text-muted-foreground">{desc}</p>
+    <div className="grid gap-1 py-4 sm:grid-cols-[220px_1fr] sm:gap-6">
+      <dt className="font-medium">{term}</dt>
+      <dd className="text-sm leading-relaxed text-muted-foreground">{desc}</dd>
     </div>
   );
 }

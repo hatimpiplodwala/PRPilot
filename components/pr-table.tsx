@@ -181,8 +181,13 @@ export function PrTable({
 
 function PrLink({ row }: { row: RowState }) {
   return (
-    <a href={row.htmlUrl} target="_blank" rel="noreferrer" className="font-medium hover:underline">
-      {row.repoFullName} #{row.number}
+    <a
+      href={row.htmlUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="font-mono text-[13px] font-medium hover:underline"
+    >
+      {row.repoFullName}#{row.number}
     </a>
   );
 }
