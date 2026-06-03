@@ -3,7 +3,6 @@ import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { LogoMark, Wordmark } from "@/components/logo";
 import { ReviewPreview } from "@/components/review-preview";
-import { Github } from "lucide-react";
 
 export default async function Home() {
   const session = await auth();
@@ -51,7 +50,6 @@ export default async function Home() {
                 }}
               >
                 <Button type="submit" size="lg">
-                  <Github className="h-5 w-5" />
                   Continue with GitHub
                 </Button>
               </form>
