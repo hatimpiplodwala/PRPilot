@@ -2,8 +2,7 @@
 -- Run once in the Supabase SQL editor (replace <APP_URL> and <CRON_SECRET>).
 --
 -- This calls the deployed Next.js processor route directly, so you do NOT need
--- to deploy the Edge Functions or install the Supabase CLI. (The functions in
--- supabase/functions/ remain a valid alternative if you prefer that route.)
+-- to deploy any Edge Functions or install the Supabase CLI.
 --
 --   <APP_URL>      e.g. https://pr-pilot-nine.vercel.app   (no trailing slash)
 --   <CRON_SECRET>  the same value as the app's CRON_SECRET env var
