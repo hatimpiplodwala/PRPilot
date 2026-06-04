@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { listUserInstallations } from "@/lib/users";
 import { consumeRateLimit } from "@/lib/ratelimit";
 import { enqueueJob } from "@/lib/jobs";
+import { getInstallationOctokit, getPullRequest } from "@/lib/github";
 import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -32,6 +33,22 @@ export async function POST(req: NextRequest) {
   const installations = await listUserInstallations(session.user.id);
   if (!installations.some((i) => i.github_installation_id === installationId)) {
     return NextResponse.json({ error: "Installation not found" }, { status: 403 });
+  }
+
+  // Verify the PR exists, is open, and the supplied SHA matches the current head.
+  // Without this the client could enqueue a review of any repo+PR the installation
+  // can see (including closed PRs or arbitrary SHAs).
+  try {
+    const octokit = getInstallationOctokit(installationId);
+    const pr = await getPullRequest(octokit, repoFullName, prNumber);
+    if (pr.state !== "open") {
+      return NextResponse.json({ error: "Pull request is not open" }, { status: 409 });
+    }
+    if (pr.headSha !== headSha) {
+      return NextResponse.json({ error: "Head SHA is stale; refresh and retry" }, { status: 409 });
+    }
+  } catch {
+    return NextResponse.json({ error: "Pull request not found" }, { status: 404 });
   }
 
   // Per-user rate limit.

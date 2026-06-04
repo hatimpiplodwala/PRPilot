@@ -9,11 +9,19 @@ import { upsertUser } from "@/lib/users";
  *
  * Reads AUTH_SECRET, AUTH_GITHUB_ID, AUTH_GITHUB_SECRET from the environment.
  */
+// Trust the incoming Host header only where it can't be spoofed:
+//   - non-production (localhost dev)
+//   - Vercel (sets x-forwarded-host from its edge)
+//   - explicit opt-in via AUTH_TRUST_HOST=true (self-hosting behind a trusted proxy)
+// In any other production deployment, leave it false so Auth.js requires AUTH_URL,
+// closing the host-header → OAuth-callback rebinding vector.
+const trustHost =
+  process.env.NODE_ENV !== "production" ||
+  !!process.env.VERCEL ||
+  process.env.AUTH_TRUST_HOST === "true";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Trust the incoming host header (needed when self-hosting / running on
-  // localhost rather than Vercel's auto-detected URL). Without this, Auth.js
-  // can fail to read the PKCE/state cookie on the OAuth callback.
-  trustHost: true,
+  trustHost,
   providers: [GitHub],
   callbacks: {
     async jwt({ token, profile }) {

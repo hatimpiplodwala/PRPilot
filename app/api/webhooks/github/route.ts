@@ -25,9 +25,10 @@ export async function POST(req: NextRequest) {
   }
 
   const event = req.headers.get("x-github-event") ?? "";
-  const payload = JSON.parse(raw);
 
   try {
+    const payload = JSON.parse(raw);
+
     if (event === "installation") {
       await handleInstallation(payload);
       return NextResponse.json({ ok: true });
