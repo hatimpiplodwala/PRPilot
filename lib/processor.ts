@@ -18,7 +18,7 @@ import {
   suggestionCommentBody,
 } from "./review";
 import type { Octokit } from "@octokit/rest";
-import type { PotentialBug, ReviewJob, Suggestion } from "./types";
+import type { CommentKind, PotentialBug, ReviewJob, Suggestion } from "./types";
 
 /**
  * The full review pipeline for a single claimed job:
@@ -70,6 +70,7 @@ export async function processJob(job: ReviewJob): Promise<void> {
     }
 
     let commentId: number;
+    let commentKind: CommentKind;
     if (inline.length > 0) {
       const body = renderReviewBody(review.summary, remainingBugs, remainingSuggestions, {
         truncatedNote,
@@ -84,6 +85,7 @@ export async function processJob(job: ReviewJob): Promise<void> {
           body,
           inline
         );
+        commentKind = "review";
       } catch {
         // Inline review rejected (e.g. a line drifted out of the diff) — fall back
         // to a single summary comment containing everything.
@@ -92,6 +94,7 @@ export async function processJob(job: ReviewJob): Promise<void> {
           job,
           renderReviewMarkdown(review, { truncatedNote })
         );
+        commentKind = "issue_comment";
       }
     } else {
       commentId = await postSummaryComment(
@@ -99,9 +102,10 @@ export async function processJob(job: ReviewJob): Promise<void> {
         job,
         renderReviewMarkdown(review, { truncatedNote })
       );
+      commentKind = "issue_comment";
     }
 
-    await completeJob(job.id, review, commentId);
+    await completeJob(job.id, review, commentId, commentKind);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Best-effort fallback comment; don't let a comment failure mask the error.

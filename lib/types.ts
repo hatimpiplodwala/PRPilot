@@ -35,6 +35,13 @@ export interface ChangedFile {
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 export type JobTrigger = "webhook" | "manual";
+/**
+ * Which GitHub API the stored `comment_id` came from. Drives the URL fragment
+ * the dashboard uses to deep-link to the right anchor on the PR page:
+ *   review        -> #pullrequestreview-<id>
+ *   issue_comment -> #issuecomment-<id>
+ */
+export type CommentKind = "review" | "issue_comment";
 
 export interface ReviewJob {
   id: string;
@@ -46,6 +53,7 @@ export interface ReviewJob {
   trigger: JobTrigger;
   result_json: Review | null;
   comment_id: number | null;
+  comment_kind: CommentKind | null;
   error: string | null;
   created_at: string;
   updated_at: string;

@@ -34,12 +34,21 @@ create table if not exists review_jobs (
                      check (trigger in ('webhook','manual')),
   result_json      jsonb,
   comment_id       bigint,
+  -- Which GitHub API the comment_id refers to. Drives deep-linking from the
+  -- dashboard to the right anchor on the PR page.
+  --   review        -> #pullrequestreview-<id>  (pulls.createReview)
+  --   issue_comment -> #issuecomment-<id>       (issues.createComment)
+  comment_kind     text check (comment_kind in ('review','issue_comment')),
   error            text,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
   -- Dedupe repeated webhook deliveries for the same commit.
   unique (repo_full_name, pr_number, head_sha)
 );
+
+-- Idempotent backfill for databases created before comment_kind existed.
+alter table review_jobs add column if not exists comment_kind text
+  check (comment_kind in ('review','issue_comment'));
 
 create index if not exists review_jobs_status_idx on review_jobs (status, created_at);
 

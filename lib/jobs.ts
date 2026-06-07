@@ -1,5 +1,5 @@
 import { getServiceSupabase } from "./db";
-import type { Review, ReviewJob } from "./types";
+import type { CommentKind, Review, ReviewJob } from "./types";
 
 /**
  * The `review_jobs` table doubles as the work queue. These helpers enqueue,
@@ -101,12 +101,19 @@ export async function claimQueuedJobs(limit: number): Promise<ReviewJob[]> {
 export async function completeJob(
   jobId: string,
   result: Review,
-  commentId: number | null
+  commentId: number | null,
+  commentKind: CommentKind | null
 ): Promise<void> {
   const supabase = getServiceSupabase();
   const { error } = await supabase
     .from("review_jobs")
-    .update({ status: "done", result_json: result, comment_id: commentId, error: null })
+    .update({
+      status: "done",
+      result_json: result,
+      comment_id: commentId,
+      comment_kind: commentKind,
+      error: null,
+    })
     .eq("id", jobId);
   if (error) throw new Error(`completeJob failed: ${error.message}`);
 }

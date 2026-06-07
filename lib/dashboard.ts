@@ -3,7 +3,7 @@ import { listOpenPullRequests } from "./github";
 import { listRecentJobs } from "./jobs";
 import { getRateLimitStatus, type RateLimitStatus } from "./ratelimit";
 import { env } from "./env";
-import type { JobStatus } from "./types";
+import type { CommentKind, JobStatus } from "./types";
 
 export interface PrRow {
   installationId: number;
@@ -16,6 +16,7 @@ export interface PrRow {
   status: JobStatus | "none";
   jobId: string | null;
   commentId: number | null;
+  commentKind: CommentKind | null;
   error: string | null;
   reviewedAt: string | null;
 }
@@ -71,6 +72,7 @@ export async function getDashboardData(userId: string): Promise<{
         status: job?.status ?? "none",
         jobId: job?.id ?? null,
         commentId: job?.comment_id ?? null,
+        commentKind: job?.comment_kind ?? null,
         error: job?.status === "failed" ? job?.error ?? null : null,
         reviewedAt: job?.status === "done" ? job?.updated_at ?? null : null,
       });

@@ -55,11 +55,14 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <>
-            <div className="mb-4 flex items-center justify-between">
+            <div className="sticky top-14 z-30 -mx-6 mb-4 flex items-center justify-between border-b border-border bg-background/85 px-6 py-3 backdrop-blur">
               <h2 className="text-sm font-medium text-muted-foreground">
                 Open pull requests ({prs.length})
               </h2>
-              <a href={installUrl} className="text-xs text-muted-foreground hover:underline">
+              <a
+                href={installUrl}
+                className="rounded text-xs text-muted-foreground underline decoration-transparent underline-offset-4 transition-colors hover:text-foreground hover:decoration-primary/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+              >
                 Manage repositories
               </a>
             </div>

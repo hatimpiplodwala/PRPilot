@@ -3,6 +3,8 @@ import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { LogoMark, Wordmark } from "@/components/logo";
 import { ReviewPreview } from "@/components/review-preview";
+import { InstallMock } from "@/components/install-mock";
+import { StickyMobileCta } from "@/components/sticky-mobile-cta";
 
 export default async function Home() {
   const session = await auth();
@@ -20,7 +22,7 @@ export default async function Home() {
             href="https://github.com/hatimpiplodwala/PRPilot"
             target="_blank"
             rel="noreferrer"
-            className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded font-mono text-xs text-muted-foreground underline decoration-transparent underline-offset-4 transition-colors hover:text-foreground hover:decoration-primary/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
           >
             github.com/PRPilot
           </a>
@@ -67,6 +69,30 @@ export default async function Home() {
 
         {/* How it works */}
         <section className="border-t border-border py-14">
+          <div className="mb-10 grid items-center gap-8 lg:grid-cols-[1fr_1.05fr] lg:gap-12">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">
+                Install in 30 seconds
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold tracking-tight">
+                You stay in control of what PRPilot sees.
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+                PRPilot installs as a GitHub App, not an OAuth scope. You pick the repositories
+                — switch them anytime — and grant only what&apos;s needed to read diffs and
+                comment back on PRs.
+              </p>
+              <ul className="mt-5 space-y-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                <li>· Personal account or any org you admin</li>
+                <li>· Per-repo, not org-wide</li>
+                <li>· Three least-privilege permissions</li>
+              </ul>
+            </div>
+            <div className="lg:pl-2">
+              <InstallMock />
+            </div>
+          </div>
+
           <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
             <Step n="01" title="Install the app" desc="Grant access to the repositories you want reviewed. Permissions are least-privilege." />
             <Step n="02" title="Open a pull request" desc="PRPilot triggers automatically on open and reopen. No commands, no config." />
@@ -91,18 +117,32 @@ export default async function Home() {
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-between gap-3 px-6 py-6 text-sm text-muted-foreground sm:flex-row">
           <div className="flex items-center gap-2">
             <LogoMark className="h-5 w-5" />
-            <span>Intended to assist, not replace, human review.</span>
+            <Wordmark className="text-foreground" />
+            <span className="ml-2">Intended to assist, not replace, human review.</span>
           </div>
           <a
             href="https://github.com/hatimpiplodwala/PRPilot"
             target="_blank"
             rel="noreferrer"
-            className="transition-colors hover:text-foreground"
+            className="rounded underline decoration-transparent underline-offset-4 transition-colors hover:text-foreground hover:decoration-primary/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
           >
             View source
           </a>
         </div>
       </footer>
+
+      <StickyMobileCta>
+        <form
+          action={async () => {
+            "use server";
+            await signIn("github", { redirectTo: "/dashboard" });
+          }}
+        >
+          <Button type="submit" size="lg" className="w-full">
+            Continue with GitHub
+          </Button>
+        </form>
+      </StickyMobileCta>
     </div>
   );
 }

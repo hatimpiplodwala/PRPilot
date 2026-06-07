@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
  */
 export function ReviewPreview() {
   return (
-    <div className="gloss overflow-hidden rounded-xl border border-border bg-card">
+    <div className="gloss overflow-hidden rounded-xl border border-border bg-card motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 motion-safe:fill-mode-both">
       {/* Comment header, GitHub-comment style */}
       <div className="flex items-center gap-2.5 border-b border-border bg-muted/30 px-4 py-3">
         <LogoMark className="h-6 w-6" />
@@ -23,13 +23,13 @@ export function ReviewPreview() {
       </div>
 
       <div className="space-y-5 p-5 text-sm leading-relaxed">
-        <p>
+        <p className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-500 motion-safe:delay-100 motion-safe:fill-mode-both">
           <span className="font-medium">Summary. </span>
           Adds retry-with-backoff to the file uploader and tightens signature handling on the
           webhook route. Changes are focused; two issues worth a look before merge.
         </p>
 
-        <Section title="Potential bugs" count={2}>
+        <Section title="Potential bugs" count={2} delay="motion-safe:delay-200">
           <Finding severity="high" file="lib/upload.ts">
             The retry timer isn&apos;t cleared on a successful upload, so a late retry can
             double-send the same file.
@@ -40,7 +40,7 @@ export function ReviewPreview() {
           </Finding>
         </Section>
 
-        <Section title="Suggestions" count={2}>
+        <Section title="Suggestions" count={2} delay="motion-safe:delay-300">
           <Finding file="lib/upload.ts">
             Extract the backoff calculation into a pure helper so it can be unit-tested in
             isolation.
@@ -50,7 +50,7 @@ export function ReviewPreview() {
           </Finding>
         </Section>
 
-        <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+        <p className="border-t border-border pt-3 text-xs text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 motion-safe:delay-500 motion-safe:fill-mode-both">
           Automated review by PRPilot. Intended to assist, not replace, human review.
         </p>
       </div>
@@ -61,14 +61,18 @@ export function ReviewPreview() {
 function Section({
   title,
   count,
+  delay,
   children,
 }: {
   title: string;
   count: number;
+  delay?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div
+      className={`motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-500 motion-safe:fill-mode-both ${delay ?? ""}`}
+    >
       <div className="mb-2 flex items-center gap-2">
         <span className="font-medium">{title}</span>
         <span className="font-mono text-xs text-muted-foreground">({count})</span>
