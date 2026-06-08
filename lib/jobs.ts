@@ -22,72 +22,34 @@ export interface EnqueueResult {
 }
 
 /**
- * Insert a queued job, deduped on (repo, pr, head_sha).
+ * Insert a queued job, deduped on (repo, pr, head_sha). Delegates to the
+ * Postgres `enqueue_review_job` function (see supabase/schema-rpc.sql) — one
+ * round-trip, atomic, race-safe.
  *
  * Webhook triggers dedupe: a repeat delivery for the same commit is a no-op.
  * Manual triggers ("Review now") force a fresh review even on the same commit —
- * if a finished job exists for that commit it is re-queued in place (keeping its
- * comment id so the processor updates the existing comment instead of posting a
- * duplicate). A job already queued/running is left alone.
+ * if a finished job exists for that commit it is re-queued in place (keeping
+ * its comment_id so the processor updates the existing comment instead of
+ * posting a duplicate). A job already queued/running is left alone.
  */
 export async function enqueueJob(input: EnqueueInput): Promise<EnqueueResult> {
   const supabase = getServiceSupabase();
 
-  const { data: existing } = await supabase
-    .from("review_jobs")
-    .select("*")
-    .eq("repo_full_name", input.repoFullName)
-    .eq("pr_number", input.prNumber)
-    .eq("head_sha", input.headSha)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("enqueue_review_job", {
+    p_installation_id: input.installationId,
+    p_repo_full_name: input.repoFullName,
+    p_pr_number: input.prNumber,
+    p_head_sha: input.headSha,
+    p_trigger: input.trigger,
+  });
+  if (error) throw new Error(`enqueueJob failed: ${error.message}`);
 
-  if (existing) {
-    const job = existing as ReviewJob;
-    const isFinished = job.status === "done" || job.status === "failed";
-    if (input.trigger === "manual" && isFinished) {
-      // Re-queue the same row for a fresh review; keep comment_id to update in place.
-      const { data, error } = await supabase
-        .from("review_jobs")
-        .update({ status: "queued", trigger: "manual", result_json: null, error: null })
-        .eq("id", job.id)
-        .select("*")
-        .single();
-      if (error) throw new Error(`enqueueJob re-queue failed: ${error.message}`);
-      return { job: data as ReviewJob, created: true };
-    }
-    // Webhook repeat, or a review already in flight — no-op.
-    return { job, created: false };
-  }
-
-  const { data, error } = await supabase
-    .from("review_jobs")
-    .insert({
-      installation_id: input.installationId,
-      repo_full_name: input.repoFullName,
-      pr_number: input.prNumber,
-      head_sha: input.headSha,
-      trigger: input.trigger,
-      status: "queued",
-    })
-    .select("*")
-    .single();
-
-  if (error) {
-    // Unique-violation race: another request inserted the same job first.
-    if (error.code === "23505") {
-      const { data: row } = await supabase
-        .from("review_jobs")
-        .select("*")
-        .eq("repo_full_name", input.repoFullName)
-        .eq("pr_number", input.prNumber)
-        .eq("head_sha", input.headSha)
-        .single();
-      return { job: row as ReviewJob, created: false };
-    }
-    throw new Error(`enqueueJob failed: ${error.message}`);
-  }
-
-  return { job: data as ReviewJob, created: true };
+  // The function returns a jsonb object `{job, created}` (see schema-rpc.sql
+  // for why jsonb rather than `RETURNS TABLE(...)`). supabase-js surfaces this
+  // as a single nested object on `data`.
+  const row = data as { job: ReviewJob; created: boolean } | null;
+  if (!row?.job?.id) throw new Error("enqueueJob returned no row");
+  return { job: row.job, created: row.created };
 }
 
 /** Atomically move up to `limit` jobs from queued -> running and return them. */

@@ -60,6 +60,21 @@ export const env = {
     return required("CRON_SECRET");
   },
 
+  /**
+   * Origin used for server-to-self calls (e.g. the `after()` kick from /api/reviews
+   * to /api/internal/process). Built from env so a spoofed Host header on the
+   * triggering request cannot redirect the cron secret to an attacker.
+   * Precedence: APP_URL → VERCEL_URL → null (caller falls back to req origin and
+   * logs, only acceptable in local dev).
+   */
+  get appUrl(): string | null {
+    const explicit = process.env.APP_URL;
+    if (explicit) return explicit.replace(/\/$/, "");
+    const vercel = process.env.VERCEL_URL;
+    if (vercel) return `https://${vercel.replace(/\/$/, "")}`;
+    return null;
+  },
+
   // Tuning
   get reviewMaxFiles() {
     return optionalInt("REVIEW_MAX_FILES", 20);

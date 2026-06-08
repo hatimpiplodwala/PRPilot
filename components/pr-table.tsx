@@ -89,8 +89,12 @@ export function PrTable({
   }, [rows]);
 
   // Poll job statuses while any review is queued/running.
+  // Only send active (queued|running) ids — finished rows don't change, so
+  // sending them every 4s would just grow the payload as the table fills up.
   const refresh = useCallback(async () => {
-    const ids = rowsRef.current.filter((r) => r.jobId).map((r) => r.jobId);
+    const ids = rowsRef.current
+      .filter((r) => r.jobId && ACTIVE.includes(r.status))
+      .map((r) => r.jobId);
     if (ids.length === 0) return;
     try {
       const res = await fetch(`/api/jobs?ids=${ids.join(",")}`, { cache: "no-store" });

@@ -30,7 +30,14 @@ const SKIP_EXTENSIONS = [
   ".map", ".min.js", ".min.css",
 ];
 
-const SKIP_DIR_SEGMENTS = ["node_modules/", "dist/", "build/", ".next/", "vendor/"];
+// Exact path-segment names (matched against split path components), so
+// "my-build/foo.ts" is NOT skipped by "build" but "build/foo.ts" is.
+const SKIP_DIR_SEGMENTS = new Set(["node_modules", "dist", "build", ".next", "vendor"]);
+
+/** Hard ceiling on the patch text we'll send to the LLM per file. Large
+ *  generated diffs (snapshot tests, lockfile-like data files that slipped past
+ *  the name filters) can blow the prompt budget on their own. */
+const MAX_PATCH_BYTES = 12_000;
 
 function basename(path: string): string {
   const parts = path.split("/");
@@ -45,7 +52,7 @@ export function isReviewableFile(file: ChangedFile): boolean {
   const name = file.filename.toLowerCase();
   if (SKIP_EXACT.has(basename(name))) return false;
   if (SKIP_EXTENSIONS.some((ext) => name.endsWith(ext))) return false;
-  if (SKIP_DIR_SEGMENTS.some((seg) => name.includes(seg))) return false;
+  if (name.split("/").some((seg) => SKIP_DIR_SEGMENTS.has(seg))) return false;
 
   return true;
 }
@@ -136,6 +143,10 @@ export function commentableLines(patch: string): Set<number> {
  * Render selected files into a compact diff block for the LLM prompt. Each
  * added/context line is prefixed with its new-file line number so the model can
  * cite exact lines, which we then map to inline review comments.
+ *
+ * Per-file body is capped at MAX_PATCH_BYTES so one runaway diff can't blow the
+ * prompt budget (the cap is split between head and tail so we keep context from
+ * both ends of the patch).
  */
 export function buildDiffText(files: ChangedFile[]): string {
   return files
@@ -144,7 +155,16 @@ export function buildDiffText(files: ChangedFile[]): string {
       const body = parsePatch(f.patch ?? "")
         .map((l) => (l.newLine !== null ? `${l.newLine}: ${l.text}` : l.text))
         .join("\n");
-      return `${header}\n\`\`\`diff\n${body}\n\`\`\``;
+      return `${header}\n\`\`\`diff\n${capPatchBody(body)}\n\`\`\``;
     })
     .join("\n\n");
+}
+
+function capPatchBody(body: string): string {
+  if (body.length <= MAX_PATCH_BYTES) return body;
+  const keep = Math.floor(MAX_PATCH_BYTES / 2);
+  const head = body.slice(0, keep);
+  const tail = body.slice(-keep);
+  const dropped = body.length - head.length - tail.length;
+  return `${head}\n... [${dropped} bytes elided to fit prompt budget] ...\n${tail}`;
 }

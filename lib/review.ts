@@ -132,7 +132,41 @@ export function renderReviewBody(
   return lines.join("\n") + FOOTER;
 }
 
-/** Short comment used when an automated review could not be completed. */
+/**
+ * Short comment used when an automated review could not be completed.
+ *
+ * The raw error message is posted publicly on the PR, so we run it through a
+ * conservative sanitizer first. Library/HTTP errors occasionally embed tokens,
+ * URLs with credentials, or env-shaped lines — those should never reach a
+ * collaborator's eyes.
+ */
 export function renderFailureMarkdown(reason: string): string {
-  return `## PRPilot Review\n\nThe automated review could not be completed: ${reason}${FOOTER}`;
+  return `## PRPilot Review\n\nThe automated review could not be completed: ${sanitizeForPublic(reason)}${FOOTER}`;
+}
+
+/** Exported for tests. */
+export function sanitizeForPublic(message: string): string {
+  let out = message;
+  // GitHub installation tokens.
+  out = out.replace(/ghs_[A-Za-z0-9]{20,}/g, "[redacted-token]");
+  // GitHub PATs / OAuth tokens.
+  out = out.replace(/gh[oprsu]_[A-Za-z0-9]{20,}/g, "[redacted-token]");
+  // Bearer/Authorization headers.
+  out = out.replace(/Bearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]");
+  // Consume the rest of the line (or up to a comma) after `Authorization:` —
+  // the previous pattern (`[^\s,]+`) stopped at the first whitespace, so
+  // `Authorization: Basic <base64>` only redacted "Basic" and left the
+  // base64 credential exposed.
+  out = out.replace(/Authorization:\s*[^,\n\r]+/gi, "Authorization: [redacted]");
+  // URL credentials (https://user:pass@host).
+  out = out.replace(/(https?:\/\/)[^\s/:@]+:[^\s/@]+@/gi, "$1[redacted]@");
+  // Long base64-ish blobs (likely keys/JWTs); leave shorter ids alone.
+  out = out.replace(/\b[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{40,}(?:\.[A-Za-z0-9_-]+)?\b/g, "[redacted]");
+  // Anything looking like SECRET=value / API_KEY: value.
+  out = out.replace(/\b([A-Z][A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD))\s*[:=]\s*\S+/g, "$1=[redacted]");
+
+  // Cap so a huge stack trace can't dominate the PR conversation.
+  const MAX = 500;
+  if (out.length > MAX) out = out.slice(0, MAX) + "…";
+  return out;
 }

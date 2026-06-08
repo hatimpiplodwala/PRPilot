@@ -38,10 +38,14 @@ export async function GET(req: NextRequest) {
         accountLogin.toLowerCase() === session.user.login.toLowerCase();
 
       if (owns) {
+        // Setup callback is the user actively (re)installing — clear any
+        // prior tombstone so a legitimate reinstall actually shows up on the
+        // dashboard.
         await upsertInstallation({
           githubInstallationId: Number(installationId),
           accountLogin,
           userId: session.user.id,
+          revive: true,
         });
       }
     } catch {

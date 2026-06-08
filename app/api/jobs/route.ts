@@ -2,9 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { getServiceSupabase } from "@/lib/db";
 import { listUserInstallations } from "@/lib/users";
-import type { CommentKind, Review } from "@/lib/types";
+import type { CommentKind } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+// Per-user data; never let a CDN, browser, or shared proxy cache it.
+const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" } as const;
+function jsonNoStore(body: unknown, init: { status?: number } = {}) {
+  return NextResponse.json(body, { ...init, headers: NO_STORE_HEADERS });
+}
 
 interface JobPayload {
   status: string;
@@ -27,13 +33,19 @@ interface JobPayload {
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return jsonNoStore({ error: "Not authenticated" }, { status: 401 });
   }
 
   const idsParam = req.nextUrl.searchParams.get("ids");
-  const ids = (idsParam ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  // Drop any token that isn't a UUID — otherwise Supabase rejects the whole
+  // .in() query with 22P02 and we'd return zero results for the valid ones too.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const ids = (idsParam ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => UUID_RE.test(s));
   if (ids.length === 0) {
-    return NextResponse.json({ jobs: {} });
+    return jsonNoStore({ jobs: {} });
   }
   const wantSummary = req.nextUrl.searchParams.get("details") === "summary";
 
@@ -41,17 +53,20 @@ export async function GET(req: NextRequest) {
   const installations = await listUserInstallations(session.user.id);
   const installationIds = installations.map((i) => i.github_installation_id);
   if (installationIds.length === 0) {
-    return NextResponse.json({ jobs: {} });
+    return jsonNoStore({ jobs: {} });
   }
 
   // We always try with comment_kind first. If the column hasn't been added to
   // the database yet (deploy ordered before the migration), Supabase returns
   // 42703 and we fall back to the pre-migration shape so polling stays alive.
+  //
+  // For summary reads we use a jsonb path expression (`result_json->>summary`)
+  // so Postgres ships only the summary text, not the entire review jsonb.
   const withKind = wantSummary
-    ? "id,status,comment_id,comment_kind,error,updated_at,result_json"
+    ? "id,status,comment_id,comment_kind,error,updated_at,summary:result_json->>summary"
     : "id,status,comment_id,comment_kind,error,updated_at";
   const withoutKind = wantSummary
-    ? "id,status,comment_id,error,updated_at,result_json"
+    ? "id,status,comment_id,error,updated_at,summary:result_json->>summary"
     : "id,status,comment_id,error,updated_at";
 
   const supabase = getServiceSupabase();
@@ -78,7 +93,7 @@ export async function GET(req: NextRequest) {
     comment_kind: CommentKind | null;
     error: string | null;
     updated_at: string;
-    result_json?: Review | null;
+    summary?: string | null;
   }>;
   for (const row of rows) {
     const payload: JobPayload = {
@@ -88,10 +103,10 @@ export async function GET(req: NextRequest) {
       error: row.error,
       updated_at: row.updated_at,
     };
-    if (wantSummary && row.result_json?.summary) {
-      payload.summary = row.result_json.summary;
+    if (wantSummary && row.summary) {
+      payload.summary = row.summary;
     }
     jobs[row.id] = payload;
   }
-  return NextResponse.json({ jobs });
+  return jsonNoStore({ jobs });
 }

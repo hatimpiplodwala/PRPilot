@@ -31,6 +31,26 @@ select cron.schedule(
   $$ select 1; $$
 );
 
+-- Garbage-collect old rate-limit buckets. Each (subject, hour) bucket lives
+-- forever otherwise — over months the table accumulates rows that no live
+-- window will ever read. 7 days is plenty for any forensics.
+select cron.schedule(
+  'prpilot-cleanup-rate-limits',
+  '17 4 * * *',
+  $$ delete from rate_limits where window_start < now() - interval '7 days'; $$
+);
+
+-- Garbage-collect old webhook delivery records. We only need recent rows to
+-- catch the realistic re-delivery window (GitHub retries a webhook for up to
+-- a few hours); 30 days gives a comfortable audit trail without unbounded growth.
+select cron.schedule(
+  'prpilot-cleanup-webhook-deliveries',
+  '23 4 * * *',
+  $$ delete from webhook_deliveries where received_at < now() - interval '30 days'; $$
+);
+
 -- To remove later:
 --   select cron.unschedule('prpilot-process-reviews');
 --   select cron.unschedule('prpilot-keep-alive');
+--   select cron.unschedule('prpilot-cleanup-rate-limits');
+--   select cron.unschedule('prpilot-cleanup-webhook-deliveries');
