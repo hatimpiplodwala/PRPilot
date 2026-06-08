@@ -63,6 +63,13 @@ $$ language plpgsql;
 -- The retry loop handles the race where two callers insert concurrently; the
 -- unique constraint on (repo, pr, head_sha) catches the loser, which then loops
 -- to read the row that won.
+--
+-- DROP first: Postgres does not allow `CREATE OR REPLACE FUNCTION` to change
+-- the return type. A prior version of this function returned `TABLE(job
+-- review_jobs, created boolean)`, so re-running this file would otherwise
+-- fail with 42P13 "cannot change return type of existing function".
+drop function if exists enqueue_review_job(bigint, text, integer, text, text);
+
 create or replace function enqueue_review_job(
   p_installation_id bigint,
   p_repo_full_name text,

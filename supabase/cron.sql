@@ -1,6 +1,3 @@
--- Schedule the background queue drain with pg_cron + pg_net.
--- Run once in the Supabase SQL editor (replace <APP_URL> and <CRON_SECRET>).
---
 -- This calls the deployed Next.js processor route directly, so you do NOT need
 -- to deploy any Edge Functions or install the Supabase CLI.
 --
@@ -48,9 +45,3 @@ select cron.schedule(
   '23 4 * * *',
   $$ delete from webhook_deliveries where received_at < now() - interval '30 days'; $$
 );
-
--- To remove later:
---   select cron.unschedule('prpilot-process-reviews');
---   select cron.unschedule('prpilot-keep-alive');
---   select cron.unschedule('prpilot-cleanup-rate-limits');
---   select cron.unschedule('prpilot-cleanup-webhook-deliveries');
