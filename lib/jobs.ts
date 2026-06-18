@@ -100,9 +100,14 @@ export async function listRecentJobs(
 ): Promise<ReviewJob[]> {
   if (installationIds.length === 0) return [];
   const supabase = getServiceSupabase();
+  // Explicit column list (not "*"): the dashboard never reads result_json, and
+  // shipping the full review jsonb for up to `limit` rows is pure wasted
+  // bandwidth on every load.
   const { data } = await supabase
     .from("review_jobs")
-    .select("*")
+    .select(
+      "id,installation_id,repo_full_name,pr_number,head_sha,status,trigger,comment_id,comment_kind,error,created_at,updated_at"
+    )
     .in("installation_id", installationIds)
     .order("created_at", { ascending: false })
     .limit(limit);

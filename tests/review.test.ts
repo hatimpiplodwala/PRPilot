@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { renderReviewMarkdown, renderFailureMarkdown, sanitizeForPublic } from "@/lib/review";
-import type { Review } from "@/lib/types";
+import {
+  partitionFindings,
+  renderReviewMarkdown,
+  renderFailureMarkdown,
+  sanitizeForPublic,
+} from "@/lib/review";
+import type { ChangedFile, Review } from "@/lib/types";
 
 const base: Review = {
   summary: "Looks solid overall.",
@@ -69,6 +74,51 @@ describe("renderReviewMarkdown", () => {
 
   it("always includes the PRPilot footer", () => {
     expect(renderReviewMarkdown(base)).toContain("Automated review by PRPilot");
+  });
+});
+
+describe("partitionFindings", () => {
+  // Hunk: new-file lines 1 (context), 2 (added), 3 (context) are commentable.
+  const files: ChangedFile[] = [
+    {
+      filename: "a.ts",
+      status: "modified",
+      additions: 1,
+      deletions: 0,
+      patch: "@@ -1,2 +1,3 @@\n context\n+added\n more",
+    },
+    // No patch (binary/too-large) — nothing in it is commentable.
+    { filename: "img.png", status: "added", additions: 0, deletions: 0 },
+  ];
+
+  it("anchors findings on commentable lines as inline comments", () => {
+    const review: Review = {
+      summary: "ok",
+      potential_bugs: [{ file: "a.ts", description: "bug here", severity: "high", line: 2 }],
+      suggestions: [{ file: "a.ts", description: "tidy this", line: 1 }],
+    };
+    const { inline, remainingBugs, remainingSuggestions } = partitionFindings(review, files);
+    expect(inline).toHaveLength(2);
+    expect(inline[0]).toMatchObject({ path: "a.ts", line: 2 });
+    expect(inline[0].body).toContain("bug here");
+    expect(remainingBugs).toHaveLength(0);
+    expect(remainingSuggestions).toHaveLength(0);
+  });
+
+  it("keeps findings off non-commentable lines in the summary lists", () => {
+    const review: Review = {
+      summary: "ok",
+      potential_bugs: [
+        { file: "a.ts", description: "out of diff", severity: "low", line: 99 },
+        { file: "a.ts", description: "no line at all", severity: "medium" },
+        { file: "img.png", description: "no patch", severity: "high", line: 1 },
+      ],
+      suggestions: [{ file: "a.ts", description: "no anchor", line: 99 }],
+    };
+    const { inline, remainingBugs, remainingSuggestions } = partitionFindings(review, files);
+    expect(inline).toHaveLength(0);
+    expect(remainingBugs).toHaveLength(3);
+    expect(remainingSuggestions).toHaveLength(1);
   });
 });
 

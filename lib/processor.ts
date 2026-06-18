@@ -7,19 +7,16 @@ import {
   postPrComment,
   postReview,
   updatePrComment,
-  type InlineComment,
 } from "./github";
-import { commentableLines } from "./diff";
 import { reviewDiff } from "./llm";
 import {
-  bugCommentBody,
+  partitionFindings,
   renderReviewBody,
   renderReviewMarkdown,
   renderFailureMarkdown,
-  suggestionCommentBody,
 } from "./review";
 import type { Octokit } from "@octokit/rest";
-import type { CommentKind, PotentialBug, ReviewJob, Suggestion } from "./types";
+import type { CommentKind, ReviewJob } from "./types";
 import { log } from "./log";
 
 /**
@@ -54,31 +51,9 @@ export async function processJob(job: ReviewJob): Promise<void> {
       body: pr.body ?? undefined,
     });
 
-    // Which new-file lines are commentable, per file.
-    const lineSets = new Map<string, Set<number>>();
-    for (const f of files) {
-      if (f.patch) lineSets.set(f.filename, commentableLines(f.patch));
-    }
-
-    // Split findings into inline-anchored vs. summary-only.
-    const inline: InlineComment[] = [];
-    const remainingBugs: PotentialBug[] = [];
-    const remainingSuggestions: Suggestion[] = [];
-
-    for (const bug of review.potential_bugs) {
-      if (bug.line && lineSets.get(bug.file)?.has(bug.line)) {
-        inline.push({ path: bug.file, line: bug.line, body: bugCommentBody(bug) });
-      } else {
-        remainingBugs.push(bug);
-      }
-    }
-    for (const s of review.suggestions) {
-      if (s.line && lineSets.get(s.file)?.has(s.line)) {
-        inline.push({ path: s.file, line: s.line, body: suggestionCommentBody(s) });
-      } else {
-        remainingSuggestions.push(s);
-      }
-    }
+    // Split findings into inline-anchored (mapped to a commentable diff line)
+    // vs. summary-only. Pure + unit-tested in review.ts.
+    const { inline, remainingBugs, remainingSuggestions } = partitionFindings(review, files);
 
     // Publish first, dismiss-prior after. The previous ordering dismissed the
     // prior PR review BEFORE attempting postReview — so a 422 on the new

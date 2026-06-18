@@ -1,10 +1,54 @@
-import type { PotentialBug, Review, Severity, Suggestion } from "./types";
+import type { ChangedFile, InlineComment, PotentialBug, Review, Severity, Suggestion } from "./types";
+import { commentableLines } from "./diff";
 
 /**
  * Pure rendering of a structured Review into the Markdown posted as a PR
  * comment. Plain and professional — no emoji. Uses collapsible <details>
  * sections so it stays compact in the PR timeline. No I/O — unit-tested.
  */
+
+export interface PartitionedFindings {
+  /** Findings anchorable to a commentable diff line — posted as inline comments. */
+  inline: InlineComment[];
+  /** Bugs that couldn't be anchored — folded into the summary body instead. */
+  remainingBugs: PotentialBug[];
+  /** Suggestions that couldn't be anchored — folded into the summary body. */
+  remainingSuggestions: Suggestion[];
+}
+
+/**
+ * Split a review's findings into those that map to a commentable new-file line
+ * (posted inline on the diff) and those that don't (kept for the summary so
+ * nothing is lost). Pure — extracted from the processor so it can be unit-tested.
+ */
+export function partitionFindings(review: Review, files: ChangedFile[]): PartitionedFindings {
+  // Which new-file lines are commentable, per file.
+  const lineSets = new Map<string, Set<number>>();
+  for (const f of files) {
+    if (f.patch) lineSets.set(f.filename, commentableLines(f.patch));
+  }
+
+  const inline: InlineComment[] = [];
+  const remainingBugs: PotentialBug[] = [];
+  const remainingSuggestions: Suggestion[] = [];
+
+  for (const bug of review.potential_bugs) {
+    if (bug.line && lineSets.get(bug.file)?.has(bug.line)) {
+      inline.push({ path: bug.file, line: bug.line, body: bugCommentBody(bug) });
+    } else {
+      remainingBugs.push(bug);
+    }
+  }
+  for (const s of review.suggestions) {
+    if (s.line && lineSets.get(s.file)?.has(s.line)) {
+      inline.push({ path: s.file, line: s.line, body: suggestionCommentBody(s) });
+    } else {
+      remainingSuggestions.push(s);
+    }
+  }
+
+  return { inline, remainingBugs, remainingSuggestions };
+}
 
 export const SEVERITY_LABEL: Record<Severity, string> = {
   high: "High",

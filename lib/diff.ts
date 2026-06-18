@@ -34,10 +34,12 @@ const SKIP_EXTENSIONS = [
 // "my-build/foo.ts" is NOT skipped by "build" but "build/foo.ts" is.
 const SKIP_DIR_SEGMENTS = new Set(["node_modules", "dist", "build", ".next", "vendor"]);
 
-/** Hard ceiling on the patch text we'll send to the LLM per file. Large
- *  generated diffs (snapshot tests, lockfile-like data files that slipped past
- *  the name filters) can blow the prompt budget on their own. */
-const MAX_PATCH_BYTES = 12_000;
+/** Hard ceiling on the patch text we'll send to the LLM per file, measured in
+ *  characters (the unit the slicing below operates on, and a closer proxy for
+ *  the model's token budget than raw bytes). Large generated diffs (snapshot
+ *  tests, lockfile-like data files that slipped past the name filters) can blow
+ *  the prompt budget on their own. */
+const MAX_PATCH_CHARS = 12_000;
 
 function basename(path: string): string {
   const parts = path.split("/");
@@ -144,7 +146,7 @@ export function commentableLines(patch: string): Set<number> {
  * added/context line is prefixed with its new-file line number so the model can
  * cite exact lines, which we then map to inline review comments.
  *
- * Per-file body is capped at MAX_PATCH_BYTES so one runaway diff can't blow the
+ * Per-file body is capped at MAX_PATCH_CHARS so one runaway diff can't blow the
  * prompt budget (the cap is split between head and tail so we keep context from
  * both ends of the patch).
  */
@@ -161,10 +163,10 @@ export function buildDiffText(files: ChangedFile[]): string {
 }
 
 function capPatchBody(body: string): string {
-  if (body.length <= MAX_PATCH_BYTES) return body;
-  const keep = Math.floor(MAX_PATCH_BYTES / 2);
+  if (body.length <= MAX_PATCH_CHARS) return body;
+  const keep = Math.floor(MAX_PATCH_CHARS / 2);
   const head = body.slice(0, keep);
   const tail = body.slice(-keep);
   const dropped = body.length - head.length - tail.length;
-  return `${head}\n... [${dropped} bytes elided to fit prompt budget] ...\n${tail}`;
+  return `${head}\n... [${dropped} characters elided to fit prompt budget] ...\n${tail}`;
 }

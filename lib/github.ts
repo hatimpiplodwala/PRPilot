@@ -1,7 +1,9 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import { env } from "./env";
-import type { ChangedFile } from "./types";
+import type { ChangedFile, InlineComment } from "./types";
+
+export type { InlineComment } from "./types";
 
 /**
  * GitHub access. Two kinds of clients:
@@ -168,13 +170,6 @@ export async function postPrComment(
     body,
   });
   return data.id;
-}
-
-export interface InlineComment {
-  path: string;
-  /** Line number in the new file (RIGHT side of the diff). */
-  line: number;
-  body: string;
 }
 
 /**

@@ -3,7 +3,7 @@ import { verify } from "@octokit/webhooks-methods";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { enqueueJob } from "@/lib/jobs";
-import { consumeRateLimit } from "@/lib/ratelimit";
+import { consumeRateLimit, getRateLimitStatus } from "@/lib/ratelimit";
 import { findInstallation, upsertInstallation, removeInstallation } from "@/lib/users";
 import { evictInstallation, invalidateOpenPullRequestsCache } from "@/lib/github";
 import { hasDelivery, recordDelivery } from "@/lib/deliveries";
@@ -40,7 +40,7 @@ const PullRequestEvent = z.object({
   action: z.string(),
   installation: z.object({ id: z.number().int().positive() }),
   repository: z.object({
-    full_name: z.string().regex(/^[^/]+\/[^/]+$/),
+    full_name: z.string().regex(/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/),
     // Used to upsert the installation row if a PR event arrives before (or
     // without) the matching `installation` event — keeps the FK from
     // review_jobs.installation_id → installations satisfied.
@@ -222,9 +222,15 @@ async function handlePullRequest(
     accountLogin: payload.repository.owner.login,
   });
 
-  // Per-installation rate limit guards quota for webhook-driven reviews.
-  const rl = await consumeRateLimit(`install:${installationId}`, env.rateLimitPerHour);
-  if (!rl.allowed) {
+  // Per-installation rate limit guards quota for webhook-driven reviews. Peek
+  // first (read-only) to reject when already at the cap; we only *consume* a
+  // slot below, and only when enqueue actually creates a new review — so repeat
+  // deliveries (e.g. a reopen on the same commit) don't burn quota for work
+  // that won't run. Peek+consume isn't atomic, so a burst of concurrent new PRs
+  // on one install can overshoot the cap by the concurrency — acceptable slop
+  // for a soft free-tier guard.
+  const { remaining } = await getRateLimitStatus(`install:${installationId}`, env.rateLimitPerHour);
+  if (remaining <= 0) {
     l.warn("install rate limit hit; skipping review");
     return;
   }
@@ -237,5 +243,9 @@ async function handlePullRequest(
     headSha,
     trigger: "webhook",
   });
+  // Charge a slot only for a genuinely new review, not a deduped no-op.
+  if (created) {
+    await consumeRateLimit(`install:${installationId}`, env.rateLimitPerHour);
+  }
   l.info("pr event handled", { jobId: job.id, created });
 }

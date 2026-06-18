@@ -105,8 +105,7 @@ export function PrTable({
           {
             status: JobStatus;
             comment_id: number | null;
-            // Absent when the server fell back to the pre-migration shape.
-            comment_kind?: CommentKind | null;
+            comment_kind: CommentKind | null;
             error: string | null;
             updated_at: string;
           }
@@ -125,10 +124,7 @@ export function PrTable({
             ...r,
             status: j.status,
             commentId: j.comment_id,
-            // Preserve existing kind when the server didn't include one (either
-            // because the row legitimately has no kind, or because the server
-            // fell back to the pre-migration response shape).
-            commentKind: j.comment_kind === undefined ? r.commentKind : j.comment_kind,
+            commentKind: j.comment_kind ?? null,
             error: j.status === "failed" ? j.error ?? "Review failed" : null,
             reviewedAt: j.status === "done" ? j.updated_at : null,
           };

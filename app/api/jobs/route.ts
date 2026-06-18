@@ -1,16 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { getServiceSupabase } from "@/lib/db";
 import { listUserInstallations } from "@/lib/users";
+import { jsonNoStore } from "@/lib/http";
 import type { CommentKind } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-// Per-user data; never let a CDN, browser, or shared proxy cache it.
-const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" } as const;
-function jsonNoStore(body: unknown, init: { status?: number } = {}) {
-  return NextResponse.json(body, { ...init, headers: NO_STORE_HEADERS });
-}
 
 interface JobPayload {
   status: string;
@@ -56,32 +51,18 @@ export async function GET(req: NextRequest) {
     return jsonNoStore({ jobs: {} });
   }
 
-  // We always try with comment_kind first. If the column hasn't been added to
-  // the database yet (deploy ordered before the migration), Supabase returns
-  // 42703 and we fall back to the pre-migration shape so polling stays alive.
-  //
   // For summary reads we use a jsonb path expression (`result_json->>summary`)
   // so Postgres ships only the summary text, not the entire review jsonb.
-  const withKind = wantSummary
+  const columns = wantSummary
     ? "id,status,comment_id,comment_kind,error,updated_at,summary:result_json->>summary"
     : "id,status,comment_id,comment_kind,error,updated_at";
-  const withoutKind = wantSummary
-    ? "id,status,comment_id,error,updated_at,summary:result_json->>summary"
-    : "id,status,comment_id,error,updated_at";
 
   const supabase = getServiceSupabase();
-  let { data, error } = await supabase
+  const { data } = await supabase
     .from("review_jobs")
-    .select(withKind)
+    .select(columns)
     .in("id", ids.slice(0, 200))
     .in("installation_id", installationIds);
-  if (error?.code === "42703") {
-    ({ data } = await supabase
-      .from("review_jobs")
-      .select(withoutKind)
-      .in("id", ids.slice(0, 200))
-      .in("installation_id", installationIds));
-  }
 
   const jobs: Record<string, JobPayload> = {};
   // Supabase's typed query builder doesn't infer well on a dynamic column list,

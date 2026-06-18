@@ -1,26 +1,22 @@
-import { NextResponse, after, type NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { listUserInstallations } from "@/lib/users";
 import { consumeRateLimit } from "@/lib/ratelimit";
 import { enqueueJob } from "@/lib/jobs";
 import { getInstallationOctokit, getPullRequest } from "@/lib/github";
+import { jsonNoStore } from "@/lib/http";
 import { env } from "@/lib/env";
 import { log, newRequestId } from "@/lib/log";
 
 export const runtime = "nodejs";
 
-// Per-user, mutating endpoint — never let an intermediary cache it.
-const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" } as const;
-function jsonNoStore(body: unknown, init: { status?: number } = {}) {
-  return NextResponse.json(body, { ...init, headers: NO_STORE_HEADERS });
-}
-
 const Body = z.object({
   installationId: z.number().int().positive(),
-  repoFullName: z.string().regex(/^[^/]+\/[^/]+$/),
+  // GitHub owner/repo charset: keeps arbitrary characters out of Octokit path params.
+  repoFullName: z.string().regex(/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/),
   prNumber: z.number().int().positive(),
-  headSha: z.string().min(7),
+  headSha: z.string().min(7).max(64),
 });
 
 /** Manual "Review now": rate-limited, ownership-checked, enqueues a job. */

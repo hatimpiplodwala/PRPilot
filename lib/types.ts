@@ -24,6 +24,14 @@ export interface Review {
   suggestions: Suggestion[];
 }
 
+/** An inline review comment anchored to a specific new-file (RIGHT-side) line. */
+export interface InlineComment {
+  path: string;
+  /** Line number in the new file (RIGHT side of the diff). */
+  line: number;
+  body: string;
+}
+
 /** A changed file as returned by the GitHub "list PR files" API. */
 export interface ChangedFile {
   filename: string;
