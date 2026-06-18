@@ -1,6 +1,6 @@
 # PRPilot
 
-**An AI code reviewer that lives inside GitHub.** Install it on a repo, open a pull request, and a few seconds later a structured review shows up as a comment — a one-paragraph summary, severity-ranked potential bugs, and concrete suggestions, plus inline comments on the exact lines that need attention. No browser tab to open, no copy-pasting diffs into a chat window.
+**An AI code reviewer that lives inside GitHub.** Install it on a repo, open a pull request, and a few seconds later, a structured review shows up as a comment:  a one-paragraph summary, severity-ranked potential bugs, and concrete suggestions, plus inline comments on the exact lines that need attention. No browser tab to open, no copy-pasting diffs into a chat window.
 
 Built end-to-end on free tiers: Next.js on Vercel, Postgres on Supabase, Gemini 2.5 Flash for the LLM, and a GitHub App for the integration boundary.
 
@@ -17,7 +17,7 @@ A small dashboard lists every open PR across installed repos, shows live review 
 
 ## Design decisions worth calling out
 
-These are the choices that drove the shape of the codebase — most of them are tradeoffs, not "best practices":
+These are the choices that drove the shape of the codebase. Most of them are tradeoffs, not "best practices":
 
 - **The queue is the database.** `review_jobs` doubles as the work queue *and* the audit log. Workers claim jobs with `UPDATE … FOR UPDATE SKIP LOCKED` so concurrent processors never grab the same row, and the same table answers the dashboard's "what's the status of this PR?" question without a second store. No Redis, no SQS, no separate scheduler.
 - **Webhook returns 202 immediately.** The webhook handler does signature check → enqueue → respond, all in under a second. The slow LLM work (5–30s) runs out of band in a cron-triggered processor, so nothing ever bumps Vercel Hobby's ~10s function limit.
