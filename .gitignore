@@ -11,6 +11,9 @@ next-env.d.ts
 # production
 /build
 
+# worker bundle (esbuild output for the Lambda image)
+/dist
+
 # misc
 .DS_Store
 *.pem

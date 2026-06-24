@@ -1,24 +1,20 @@
--- This calls the deployed Next.js processor route directly, so you do NOT need
--- to deploy any Edge Functions or install the Supabase CLI.
+-- pg_cron schedules for PRPilot's Supabase project.
 --
---   <APP_URL>      e.g. https://pr-pilot-nine.vercel.app   (no trailing slash)
---   <CRON_SECRET>  the same value as the app's CRON_SECRET env var
+-- The per-minute review-queue drain now runs on AWS Lambda, triggered by an
+-- EventBridge rule (see Dockerfile.worker and worker/handler.ts). pg_cron only
+-- handles keep-alive + cleanup below. The manual "Review now" path still kicks
+-- the Vercel /api/internal/process route directly.
 
 create extension if not exists pg_cron;
-create extension if not exists pg_net;
 
--- Drain the review queue every minute.
-select cron.schedule(
-  'prpilot-process-reviews',
-  '* * * * *',
-  $$
-  select net.http_post(
-    url := '<APP_URL>/api/internal/process',
-    headers := '{"Authorization": "Bearer <CRON_SECRET>", "Content-Type": "application/json"}'::jsonb,
-    body := '{}'::jsonb
-  );
-  $$
-);
+-- If this database was provisioned before the worker moved to AWS, drop the old
+-- per-minute pg_cron drain. Idempotent — no error if it was never scheduled.
+do $$
+begin
+  perform cron.unschedule('prpilot-process-reviews');
+exception when others then
+  null;
+end $$;
 
 -- Keep the free project warm so it does not pause after ~1 week idle.
 -- (The cron activity itself keeps the database active; a trivial query is enough.)

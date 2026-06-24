@@ -1,6 +1,7 @@
 # Reinstalled / rebuilt inside the image
 node_modules
 .next
+dist
 
 # Never copy secrets or local-only state into the build context
 .env
