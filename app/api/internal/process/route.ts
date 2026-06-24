@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
-import { claimQueuedJobs } from "@/lib/jobs";
-import { processJob } from "@/lib/processor";
+import { drainOnce } from "@/lib/worker";
 import { log, newRequestId } from "@/lib/log";
 
 /** Constant-time string compare so the cron secret can't be probed by timing. */
@@ -30,25 +29,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const jobs = await claimQueuedJobs(env.processBatchSize);
-  if (jobs.length === 0) {
-    reqLog.debug("nothing to process");
-    return NextResponse.json({ processed: 0 });
-  }
-
-  reqLog.info("draining batch", { count: jobs.length, jobIds: jobs.map((j) => j.id) });
-  const results = await Promise.allSettled(jobs.map((job) => processJob(job)));
-
-  // Log each rejection with its job id so failures are debuggable in production
-  // — `failed` as a bare count buried real errors.
-  const failed = results.reduce((acc, r, i) => {
-    if (r.status === "rejected") {
-      reqLog.error("job failed", { jobId: jobs[i].id, err: r.reason });
-      return acc + 1;
-    }
-    return acc;
-  }, 0);
-
-  reqLog.info("batch complete", { processed: jobs.length, failed });
-  return NextResponse.json({ processed: jobs.length, failed });
+  const result = await drainOnce(reqLog);
+  return NextResponse.json(result);
 }

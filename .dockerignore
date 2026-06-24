@@ -1,0 +1,17 @@
+# Reinstalled / rebuilt inside the image
+node_modules
+.next
+
+# Never copy secrets or local-only state into the build context
+.env
+.env.*
+.remember
+
+# VCS / tooling / docs not needed for the build
+.git
+.gitignore
+*.log
+Dockerfile
+.dockerignore
+docker-compose*.yml
+README.md

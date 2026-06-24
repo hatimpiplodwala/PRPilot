@@ -59,6 +59,10 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Self-contained server bundle in .next/standalone — the Docker image (and the
+  // Lambda worker image) copy just that plus static assets, no node_modules.
+  // Ignored by Vercel, which builds Next natively.
+  output: "standalone",
   // Hide the Next.js dev indicator widget (bottom-corner logo).
   devIndicators: false,
   // Pin the workspace root (a stray lockfile in the home dir confuses inference).

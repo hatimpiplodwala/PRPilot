@@ -1,0 +1,19 @@
+# Local container run of the PRPilot app.
+#
+# Talks to your existing (free-tier) Supabase project — the app uses the
+# Supabase JS client (PostgREST + RPC), not a raw Postgres connection, so a bare
+# `postgres` container would NOT be a drop-in dependency here. For full local DB
+# parity, run Supabase's own Docker stack with `supabase start` (Supabase CLI)
+# and point the env vars below at it. See DOCKER.md.
+
+services:
+  web:
+    build: .
+    image: prpilot:local
+    ports:
+      - "3000:3000"
+    # Runtime secrets (GitHub App, Gemini, Supabase, AUTH_SECRET, CRON_SECRET).
+    # Read from the host at run time — never baked into the image.
+    env_file:
+      - .env.local
+    restart: unless-stopped
