@@ -12,17 +12,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "doctor": "node --env-file=.env.local scripts/doctor.mjs",
-    "process": "node --env-file=.env.local scripts/process.mjs",
-    "jobs": "node --env-file=.env.local scripts/jobs.mjs"
+    "process": "node --env-file=.env.local scripts/process.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "@octokit/auth-app": "^7.1.3",
     "@octokit/rest": "^21.0.2",
     "@octokit/webhooks-methods": "^5.1.0",
-    "@radix-ui/react-slot": "^1.1.1",
     "@supabase/supabase-js": "^2.47.10",
-    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
     "next": "^15.1.3",

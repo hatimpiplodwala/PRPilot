@@ -7,15 +7,6 @@
 
 create extension if not exists pg_cron;
 
--- If this database was provisioned before the worker moved to AWS, drop the old
--- per-minute pg_cron drain. Idempotent — no error if it was never scheduled.
-do $$
-begin
-  perform cron.unschedule('prpilot-process-reviews');
-exception when others then
-  null;
-end $$;
-
 -- Keep the free project warm so it does not pause after ~1 week idle.
 -- (The cron activity itself keeps the database active; a trivial query is enough.)
 select cron.schedule(

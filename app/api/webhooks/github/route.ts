@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { enqueueJob } from "@/lib/jobs";
 import { consumeRateLimit, getRateLimitStatus } from "@/lib/ratelimit";
 import { findInstallation, upsertInstallation, removeInstallation } from "@/lib/users";
-import { evictInstallation, invalidateOpenPullRequestsCache } from "@/lib/github";
+import { evictInstallation } from "@/lib/github";
 import { hasDelivery, recordDelivery } from "@/lib/deliveries";
 import { log, newRequestId } from "@/lib/log";
 
@@ -14,16 +14,6 @@ export const runtime = "nodejs";
 // Auto-review when a PR opens, reopens, or receives new commits (synchronize).
 // New commits change head_sha, so enqueueJob dedup naturally yields a fresh review.
 const REVIEW_ACTIONS = new Set(["opened", "reopened", "synchronize"]);
-// Any of these actions changes the dashboard's view of open PRs (set, head_sha,
-// or open/closed). Bust the cached PR list so the next dashboard load reflects
-// reality without waiting out the 30s TTL.
-const CACHE_BUSTING_ACTIONS = new Set([
-  "opened",
-  "reopened",
-  "synchronize",
-  "closed",
-  "edited",
-]);
 
 // We only trust signed payloads, but still pin the fields we touch so missing
 // or wrong-typed properties surface as a 4xx rather than crashing the handler
@@ -137,12 +127,6 @@ export async function POST(req: NextRequest) {
         reqLog.warn("bad pull_request payload", { issues: parsed.error.issues });
         await markProcessed();
         return NextResponse.json({ ok: false, error: "Bad pull_request payload" }, { status: 202 });
-      }
-      // Bust the open-PR cache for this installation on any state-changing
-      // action (even ones we don't enqueue a review for, like `closed`), so the
-      // dashboard reflects the new state on the next load.
-      if (CACHE_BUSTING_ACTIONS.has(parsed.data.action)) {
-        invalidateOpenPullRequestsCache(parsed.data.installation.id);
       }
       if (!REVIEW_ACTIONS.has(parsed.data.action)) {
         await markProcessed();

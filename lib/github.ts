@@ -14,10 +14,9 @@ export type { InlineComment } from "./types";
  */
 
 let appClient: Octokit | null = null;
-// Bounded LRU so a long-lived process serving many installations doesn't grow
-// the client map forever. Map keeps insertion order; on hit we re-insert to
-// move-to-back, and on overflow we evict from the front (oldest).
-const INSTALLATION_CLIENT_CACHE_LIMIT = 64;
+// One cached Octokit per installation: createAppAuth caches the installation
+// token on the client, so reusing it mints one token per installation per
+// process instead of one per call.
 const installationClients = new Map<number, Octokit>();
 
 // Fingerprint of the (appId, privateKey) pair the current cache was built
@@ -80,12 +79,7 @@ export function getAppOctokit(): Octokit {
 export function getInstallationOctokit(installationId: number): Octokit {
   invalidateIfAuthRotated();
   const cached = installationClients.get(installationId);
-  if (cached) {
-    // Move-to-back for LRU order.
-    installationClients.delete(installationId);
-    installationClients.set(installationId, cached);
-    return cached;
-  }
+  if (cached) return cached;
   const client = new Octokit({
     authStrategy: createAppAuth,
     auth: {
@@ -96,19 +90,13 @@ export function getInstallationOctokit(installationId: number): Octokit {
     request: { fetch: timedFetch },
   });
   installationClients.set(installationId, client);
-  if (installationClients.size > INSTALLATION_CLIENT_CACHE_LIMIT) {
-    const oldest = installationClients.keys().next().value;
-    if (oldest !== undefined) installationClients.delete(oldest);
-  }
   return client;
 }
 
-/** Drop cached state (Octokit + open-PR list) for an installation, e.g. after
- *  uninstall. Safe to call for an installation we never saw. */
+/** Drop the cached Octokit for an installation, e.g. after uninstall so a
+ *  revoked token isn't reused. Safe to call for an installation we never saw. */
 export function evictInstallation(installationId: number): void {
   installationClients.delete(installationId);
-  openPrsCache.delete(installationId);
-  openPrsInflight.delete(installationId);
 }
 
 function splitRepo(fullName: string): { owner: string; repo: string } {
@@ -247,40 +235,9 @@ export interface OpenPullRequest {
   updatedAt: string;
 }
 
-// In-process TTL cache + in-flight dedupe for the dashboard's per-installation
-// PR fan-out. The expensive part is the per-repo `pulls.list` paginate (one
-// roundtrip per repo). Two dashboard loads within OPEN_PRS_TTL_MS share the
-// cached value; concurrent loads share a single in-flight promise so we never
-// fan-out twice for the same installation at the same time.
-//
-// Per-process, so multi-instance Vercel doesn't share, but a single instance
-// serving the user's reloads/multiple tabs gets the win.
-const OPEN_PRS_TTL_MS = 30_000;
-const openPrsCache = new Map<number, { expiry: number; data: OpenPullRequest[] }>();
-const openPrsInflight = new Map<number, Promise<OpenPullRequest[]>>();
-
-/** List open PRs across all repos accessible to an installation. */
+/** List open PRs across all repos accessible to an installation. Fans out one
+ *  `pulls.list` paginate per accessible repo, in parallel. */
 export async function listOpenPullRequests(installationId: number): Promise<OpenPullRequest[]> {
-  const now = Date.now();
-  const cached = openPrsCache.get(installationId);
-  if (cached && cached.expiry > now) return cached.data;
-
-  const inflight = openPrsInflight.get(installationId);
-  if (inflight) return inflight;
-
-  const promise = fetchOpenPullRequests(installationId)
-    .then((data) => {
-      openPrsCache.set(installationId, { expiry: Date.now() + OPEN_PRS_TTL_MS, data });
-      return data;
-    })
-    .finally(() => {
-      openPrsInflight.delete(installationId);
-    });
-  openPrsInflight.set(installationId, promise);
-  return promise;
-}
-
-async function fetchOpenPullRequests(installationId: number): Promise<OpenPullRequest[]> {
   const octokit = getInstallationOctokit(installationId);
   const repos = await octokit.paginate(octokit.rest.apps.listReposAccessibleToInstallation, {
     per_page: 100,
@@ -306,13 +263,4 @@ async function fetchOpenPullRequests(installationId: number): Promise<OpenPullRe
     })
   );
   return perRepo.flat();
-}
-
-/**
- * Drop cached open-PR lists for an installation. Call after we've mutated a
- * PR's state so the next dashboard load reflects reality immediately rather
- * than waiting out the TTL.
- */
-export function invalidateOpenPullRequestsCache(installationId: number): void {
-  openPrsCache.delete(installationId);
 }
